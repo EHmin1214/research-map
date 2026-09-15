@@ -31,7 +31,14 @@ SOURCES. It must yield RawSession objects. Nothing else in the tool changes.
 import json, os, re, glob
 
 HOME = os.path.expanduser("~")
-ROOT = os.path.join(HOME, ".claude", "research-map")
+# Maps live outside any one agent's folder so Claude Code and Codex share them.
+# Override with RESEARCH_MAP_HOME; the legacy ~/.claude/research-map is still honoured.
+ROOT = os.environ.get("RESEARCH_MAP_HOME") or ""
+if ROOT:
+    ROOT = os.path.abspath(os.path.expanduser(ROOT))
+else:
+    legacy = os.path.join(HOME, ".claude", "research-map")
+    ROOT = legacy if os.path.isdir(os.path.join(legacy, "maps")) else os.path.join(HOME, ".research-map")
 MAPS = os.path.join(ROOT, "maps")
 
 MAX_ASSISTANT_CHARS = 3500

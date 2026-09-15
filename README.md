@@ -23,14 +23,22 @@ any other LLM (ChatGPT, Gemini, Claude.ai …) as markdown/JSON files.
 
 ## Install
 
-**As a Claude Code plugin** (recommended)
+Works with **Claude Code** and **Codex CLI**. Requires Python 3.8+, nothing else — no pip install.
+
+**Claude Code — as a plugin** (recommended)
 
 ```
 /plugin marketplace add EHmin1214/research-map
 /plugin install research-map@research-map
 ```
 
-**Or as a personal skill**
+**Codex CLI — ask it to install the skill**
+
+> install the research-map skill from EHmin1214/research-map
+
+Codex's built-in `skill-installer` fetches it into `$CODEX_HOME/skills/research-map`.
+
+**Either one — clone and run the installer**
 
 ```bash
 git clone https://github.com/EHmin1214/research-map
@@ -39,13 +47,19 @@ bash install.sh          # macOS / Linux / Git Bash
 # powershell -ExecutionPolicy Bypass -File install.ps1     (Windows)
 ```
 
-Requires Python 3.8+. Nothing else — no pip install.
+The installer detects every agent home on the machine and installs into all of them
+(`~/.claude/skills/` and `~/.codex/skills/`). Limit it with `--claude`, `--codex`, or
+`--to <dir>`.
 
 Check what it can see on your machine:
 
 ```bash
-python ~/.claude/skills/research-map/scripts/extract.py --doctor
+python <skill-dir>/scripts/extract.py --doctor
 ```
+
+`<skill-dir>` is wherever it landed — `~/.claude/skills/research-map`,
+`~/.codex/skills/research-map`, or a plugin cache path. The skill resolves this itself;
+you only need it for manual runs.
 
 ## Use
 
@@ -145,6 +159,21 @@ writes into `~/.claude/research-map/`. The rendered page loads no external resou
 A digest keeps your prompts and the agent's prose, so treat `index.html` like the
 transcripts themselves before sharing it.
 
+## Troubleshooting
+
+**"scripts/extract.py and scripts/render.py are not in the package"**
+
+They are — the agent looked in the wrong place. The scripts sit in `scripts/` next to
+`SKILL.md`, and that absolute path differs per install: `~/.claude/skills/research-map/`,
+`~/.codex/skills/research-map/`, or a plugin cache directory. The skill resolves this at
+the start of every run; if your agent guessed a path instead, tell it to re-read
+`SKILL.md` and follow the path-resolution step first.
+
+**The map is written somewhere I did not expect**
+
+Maps default to `~/.research-map/maps/`, and an existing `~/.claude/research-map/maps/`
+keeps being used if you already have one. Set `RESEARCH_MAP_HOME` to put them anywhere.
+
 ## License
 
 MIT
@@ -167,14 +196,20 @@ LLM 과 연구를 하다 보면 자기가 어떤 갈래를 파고 어떤 결론�
 
 ## 설치
 
-플러그인으로 (권장):
+**Claude Code · 플러그인** (권장):
 
 ```
 /plugin marketplace add EHmin1214/research-map
 /plugin install research-map@research-map
 ```
 
-또는 개인 스킬로:
+**Codex CLI** — 말로 시키면 된다:
+
+> EHmin1214/research-map 의 research-map 스킬 설치해줘
+
+Codex 내장 `skill-installer` 가 `$CODEX_HOME/skills/research-map` 에 받아온다.
+
+**둘 다 · 클론 후 설치 스크립트**:
 
 ```bash
 git clone https://github.com/EHmin1214/research-map
@@ -182,6 +217,9 @@ cd research-map
 powershell -ExecutionPolicy Bypass -File install.ps1   # Windows
 bash install.sh                                        # macOS / Linux
 ```
+
+이 컴퓨터에 있는 에이전트 홈을 모두 찾아 `~/.claude/skills/` 와 `~/.codex/skills/` 양쪽에
+설치한다. `--claude` · `--codex` · `--to <폴더>` 로 좁힐 수 있다.
 
 Python 3.8 이상만 있으면 되고 추가 설치는 없다.
 `extract.py --doctor` 로 이 컴퓨터에서 무엇을 읽을 수 있는지 점검한다.

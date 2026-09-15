@@ -22,11 +22,31 @@ description: 연구 지도 — 지금까지 LLM 과 진행한 연구 세션(Clau
 | `CARD_SCHEMA.md` | 세션 카드 스키마 (서브에이전트가 digest 를 읽고 쓰는 중간 산출물) |
 | `~/.claude/research-map/maps/<지도>/` | `config.json` · `map.json` · `sessions.json` · `state.json` · `cards/` · `digests/` · `index.html` |
 
+## 스크립트 경로 먼저 확정 (설치 방식마다 다름)
+
+스크립트는 **이 SKILL.md 옆 `scripts/`** 에 있다. 절대 위치는 어떻게 설치했는지에 따라 다르다.
+
+| 설치 | 위치 |
+|---|---|
+| Claude Code 개인 스킬 | `~/.claude/skills/research-map/scripts/` |
+| Claude Code 플러그인 | `~/.claude/plugins/cache/*/research-map/*/skills/research-map/scripts/` |
+| Codex 스킬 | `~/.codex/skills/research-map/scripts/` |
+| Codex 플러그인 | `~/.codex/plugins/cache/*/research-map/*/skills/research-map/scripts/` |
+
+**세션에서 한 번** 아래를 돌려 `$RM` 을 확정하고, 이후 모든 명령에서 그 경로를 쓴다.
+절대 경로를 추측하지 마라 — 없는 경로를 부르면 "스크립트가 패키지에 없다"로 오진하게 된다.
+
+```
+python -c "import glob,os;c=[os.path.expanduser(x) for x in ['~/.claude/skills/research-map/scripts','~/.codex/skills/research-map/scripts']]+sorted(glob.glob(os.path.expanduser('~/.claude/plugins/cache/*/research-map/*/skills/research-map/scripts')))+sorted(glob.glob(os.path.expanduser('~/.codex/plugins/cache/*/research-map/*/skills/research-map/scripts')));h=[q for q in c if os.path.isdir(q)];print(h[0] if h else 'NOT FOUND')"
+```
+
+아래 명령의 `$RM` 은 전부 이 값이다. 못 찾으면 이 SKILL.md 가 있는 폴더의 `scripts/` 를 쓴다.
+
 ## 절차 — 지도 갱신
 
 ### 1. 추출 (항상)
 ```
-python ~/.claude/skills/research-map/scripts/extract.py --map <지도>
+python "$RM/extract.py" --map <지도>
 ```
 새로 생기거나 커진 세션만 다시 digest 한다. 출력의 `*` 가 이번에 바뀐 세션이다.
 `--all` 은 전체 재생성. 지도가 하나뿐이면 `--map` 은 생략 가능.
@@ -58,7 +78,7 @@ python ~/.claude/skills/research-map/scripts/extract.py --map <지도>
 
 ### 4. 렌더 + 검증 + 열기
 ```
-python ~/.claude/skills/research-map/scripts/render.py --map <지도> --open
+python "$RM/render.py" --map <지도> --open
 ```
 ERROR 가 있으면 map.json 을 고친다. WARN(경로 없음, 출처 없음, 인덱스에 없는 세션)도
 가능하면 없앤다. 사용자에게는 `index.html` 경로와 이번에 **새로 추가/변경된 노드**를 알려준다.
@@ -66,7 +86,7 @@ ERROR 가 있으면 map.json 을 고친다. WARN(경로 없음, 출처 없음, �
 ## 절차 — 새 지도 만들기
 
 ```
-python ~/.claude/skills/research-map/scripts/extract.py --init <이름> --title "..." \
+python "$RM/extract.py" --init <이름> --title "..." \
        [--source claude-code:~/.claude/projects] [--source codex:~/.codex/sessions] \
        [--source markdown:~/내보내기폴더]
 ```
