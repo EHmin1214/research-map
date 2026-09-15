@@ -622,7 +622,7 @@ function chips(){
 // ---- init
 document.getElementById('title').textContent = D.map.title || L.mapTitle;
 document.title = D.map.title || L.mapTitle;
-document.getElementById('meta').textContent = `${L.nNodes(nodes.length)} · ${L.nSess(sessions.length)} · ${L.madeAt(D.generatedAt||'')}`;
+document.getElementById('meta').textContent = `${L.nNodes(nodes.length)} · ${L.nSess(sessions.filter(s=>!s.excluded).length)} · ${L.madeAt(D.generatedAt||'')}`;
 chips();
 (function(){ const set=(sel,txt,tip)=>{const e=document.querySelector(sel); if(e){e.textContent=txt; if(tip)e.title=tip;}};
   set('.tab[data-view=map]',L.map); set('.tab[data-view=timeline]',L.timeline);
