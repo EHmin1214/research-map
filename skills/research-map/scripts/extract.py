@@ -6,6 +6,7 @@ research-map extractor — transcripts -> per-session digests + session index.
   python extract.py                       # 지도가 하나면 그것을, 여럿이면 --map 필요
   python extract.py --map mystudy             # 증분: 새로 생기거나 길어진 세션만
   python extract.py --map mystudy --all       # 전체 재생성
+  python extract.py --init one --title "그 대화 하나" --session 9a34d5ca
   python extract.py --list-maps
   python extract.py --init rat --title "랫 실험 지도"
   python extract.py --init chat --title "ChatGPT 연구" \
@@ -115,6 +116,8 @@ def main():
     ap.add_argument("--doctor", action="store_true", help="이 컴퓨터에서 뭘 읽을 수 있는지 점검")
     ap.add_argument("--init", metavar="NAME")
     ap.add_argument("--title")
+    ap.add_argument("--session", action="append", default=[],
+                    help="이 대화만 담는 지도. id 일부만 줘도 된다. --init 과 함께")
     ap.add_argument("--source", action="append", default=[],
                     help="kind:root  (예: codex:~/.codex/sessions). --init 과 함께 사용")
     args = ap.parse_args()
@@ -167,12 +170,17 @@ def main():
         d = R.init_map(args.init, args.title, srcs or None)
         print("만들었습니다: %s" % d)
         mem = R.detect_memory_dirs()
+        cp = os.path.join(d, "config.json")
+        cfg = json.load(open(cp, encoding="utf-8"))
         if mem:
-            cp = os.path.join(d, "config.json")
-            cfg = json.load(open(cp, encoding="utf-8"))
             cfg["memoryDirs"] = [m.replace(os.path.expanduser("~"), "~") for m in mem[:4]]
-            json.dump(cfg, open(cp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
             print("메모리 폴더 %d개를 config 에 넣었습니다" % len(cfg["memoryDirs"]))
+        if args.session:
+            # A transcript's filename carries its id, for every source we read.
+            cfg["include"]["pathContains"] = list(args.session)
+            cfg["include"]["minPrompts"] = 1
+            print("대화 %d개만 담는 지도입니다: %s" % (len(args.session), ", ".join(args.session)))
+        json.dump(cfg, open(cp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         print("config.json 의 sources·include 를 손본 뒤:  extract.py --map %s" % args.init)
         return
 
@@ -189,7 +197,7 @@ def main():
     if os.path.exists(index_p):
         index = {s["sessionId"]: s for s in json.load(open(index_p, encoding="utf-8"))}
 
-    changed, seen, skipped, dups = [], set(), 0, 0
+    changed, seen, skipped, dups, excl = [], set(), 0, 0, 0
     for src in cfg["sources"]:
         kind = src.get("kind")
         reader = R.SOURCES.get(kind)
@@ -213,6 +221,16 @@ def main():
             if state.get(s.path) == sig and s.sid in index:
                 continue
             meta, body = digest_session(s, cfg)
+            why = R.excluded_reason(meta, cfg.get("exclude"))
+            if why:
+                # Keep a stub so the page can say why, but never digest it.
+                index[s.sid] = {k: meta[k] for k in ("sessionId", "project", "source",
+                                                     "cwd", "start", "end", "userPrompts",
+                                                     "firstPrompt")}
+                index[s.sid]["excluded"] = why
+                state[s.path] = sig
+                excl += 1
+                continue
             if not included(meta, cfg["include"]):
                 state[s.path] = sig
                 index.pop(s.sid, None)
@@ -229,6 +247,24 @@ def main():
             state[s.path] = sig
             changed.append(s.sid)
 
+    # Re-apply the exclude rules to everything already indexed, so editing
+    # config.json takes effect on the next run without --all.
+    for sid, meta in list(index.items()):
+        why = R.excluded_reason(meta, cfg.get("exclude"))
+        if why and not meta.get("excluded"):
+            dg = meta.pop("digest", None)
+            meta.pop("digestChars", None)
+            meta["excluded"] = why
+            excl += 1
+            if dg and os.path.exists(dg):
+                try:
+                    os.remove(dg)
+                except OSError:
+                    pass
+        elif meta.get("excluded") and not why:
+            meta.pop("excluded")                 # rule withdrawn: pick it up again
+            state.pop(meta.get("path", ""), None)
+
     rows = sorted(index.values(), key=lambda m: m.get("start") or "")
     for r in rows:
         r.setdefault("source", "claude-code")
@@ -239,9 +275,14 @@ def main():
 
     for r in rows:                       # backfill fields added after first build
         r.setdefault("source", "claude-code")
-    print("[%s] 세션 %d개 · 이번에 갱신 %d개 · 필터로 제외 %d개 · 다른 도구가 가져간 사본 %d개"
-          % (name, len(rows), len(changed), skipped, dups))
+    live = [r for r in rows if not r.get("excluded")]
+    print("[%s] 세션 %d개 · 이번에 갱신 %d개 · 필터로 제외 %d개 · 사본 %d개 · 연구 아님 %d개"
+          % (name, len(live), len(changed), skipped, dups,
+             sum(1 for r in rows if r.get("excluded"))))
     for m in rows:
+        if m.get("excluded"):
+            print("  (연구 아님) %s %s  %s" % (m["start"], m["sessionId"][:8], m["excluded"]))
+            continue
         print("%s %s → %s  %-10s %-24s %s  프롬프트%4d  %s" % (
             "*" if m["sessionId"] in changed else " ", m["start"], m["end"],
             m.get("source", "?"), m["project"][:24], m["sessionId"][:8],

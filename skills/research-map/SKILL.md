@@ -122,6 +122,29 @@ python "$RM/extract.py" --init <이름> --title "..." \
 | `since` / `until` | `"YYYY-MM-DD"` 기간 |
 | `minPrompts` | 사용자 프롬프트가 이보다 적은 세션은 버림 |
 
+**대화 하나만 담는 지도**는 `--session <id 일부>` 로 만든다(여러 번 줘도 된다).
+기록 파일 이름에 id 가 들어가므로 어떤 소스든 통한다.
+
+```
+python "$RM/extract.py" --init <이름> --title "..." --session 9a34d5ca
+```
+
+### 연구가 아닌 세션 빼기
+
+`config.json` 의 `exclude` 는 **사유와 함께** 뺀다. 그래야 지도에서 "빠뜨린 것"과
+"일부러 뺀 것"이 구분된다.
+
+```json
+"exclude": {
+  "sessions": {"96a87e86": "이 도구를 만든 세션 — 연구가 아님"},
+  "firstPromptContains": ["[research-map:updater]"]
+}
+```
+
+페이지의 갱신 버튼이 부른 실행은 프롬프트에 `[research-map:updater]` 가 찍혀 **자동으로
+빠진다** — 안 그러면 갱신할 때마다 자기 실행 기록을 연구로 읽는다. 제외 규칙을 고치면
+다음 `extract` 에서 이미 색인된 세션에도 다시 적용된다(`--all` 불필요).
+
 `memoryDirs` 에는 그 연구의 메모리 폴더를 넣는다(지도의 `memory` 출처가 여기서 해석된다).
 
 ## 다른 LLM 기록 붙이기

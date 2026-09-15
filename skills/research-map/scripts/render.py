@@ -214,7 +214,8 @@ def main():
         print("지도 내용은 직전 판(rev%d)과 같습니다." % revs[-1]["rev"])
 
     slim = [{k: s.get(k) for k in ("sessionId", "project", "source", "cwd", "start", "end",
-                                   "userPrompts", "firstPrompt", "digest", "compactions")}
+                                   "userPrompts", "firstPrompt", "digest", "compactions",
+                                   "excluded")}
             for s in sessions]
     data = {"map": m, "sessions": slim, "mapName": name, "lang": cfg.get("lang") or "ko",
             "revisions": revs, "marks": marks, "gaps": {k: v for k, v in gaps.items() if v}, "next": nxt,

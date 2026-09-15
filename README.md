@@ -146,6 +146,32 @@ several projects on one machine:
 }
 ```
 
+### Leaving things out
+
+Not every conversation is research. `exclude` takes them out **with a reason**, so the map
+can tell "left out on purpose" from "not covered yet":
+
+```json
+"exclude": {
+  "sessions": {"96a87e86": "the session that built this tool — not research"},
+  "firstPromptContains": ["[research-map:updater]"]
+}
+```
+
+Runs started by the update button carry that marker and drop out automatically — otherwise
+each update would feed its own transcript back in as research. Editing the rules re-applies
+them to already-indexed sessions on the next run.
+
+### A map of one conversation
+
+```bash
+python <skill-dir>/scripts/extract.py --init one --title "That long chat" --session 9a34d5ca
+```
+
+A transcript's filename carries its id for every source, so this works for Claude Code,
+Codex and exported chats alike. Useful when one marathon conversation covered a lot and you
+want its shape rather than the whole programme's.
+
 ## Sources
 
 `config.json` lists what to read:

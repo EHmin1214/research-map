@@ -16,6 +16,9 @@ startup and injected into the page it serves. Nothing is exposed to the network.
 import http.server, json, os, secrets, subprocess, sys, threading, time, webbrowser
 import urllib.parse
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rmlib
+
 MAX_LOG = 4000
 
 
@@ -73,7 +76,7 @@ class Job(object):
 
 def agent_argv(map_name):
     """How to ask the installed agent CLI to do the judgement steps."""
-    prompt = ("research-map 스킬로 '%s' 지도를 갱신해줘. "
+    prompt = (rmlib.UPDATER_MARK + " research-map 스킬로 '%s' 지도를 갱신해줘. "
               "추출(extract)은 방금 끝났으니, 바뀐 세션의 카드를 만들고 map.json 에 "
               "병합한 다음 render 까지 해줘. 렌더는 --open 없이." % map_name)
     exe = "claude"

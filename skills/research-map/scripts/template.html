@@ -169,6 +169,8 @@ table.sess{border-collapse:collapse;width:100%;font-size:13px}
 table.sess th,table.sess td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
 table.sess th{color:var(--muted);font-size:12px;font-weight:600}
 table.sess td.n{white-space:nowrap;color:var(--muted)}
+table.sess tr.ex td{opacity:.55}
+.exbadge{border:1px solid var(--line);border-radius:999px;padding:1px 8px;font-size:11px;color:var(--muted);white-space:nowrap}
 .empty{color:var(--muted);padding:40px;text-align:center}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:6px 14px;border-radius:6px;font-size:12px;opacity:0;transition:opacity .2s;pointer-events:none}
 #toast.on{opacity:1}
@@ -235,6 +237,7 @@ const STR = {
   children:'하위',related:'관련',srcDocs:'출처·문서',
   noDates:'기간 정보가 있는 노드가 없습니다',noOpen:'열린 항목이 없습니다',
   colPeriod:'기간',colTool:'도구',colPrompt:'첫 프롬프트 · 연결된 노드',noLinked:'지도에 연결된 노드 없음',
+  exReason:'연구 아님 — 일부러 뺌',
   legend:'노드 클릭 = 상세 · 원 = 펼치기/접기 · 드래그/휠 = 이동/확대',
   nNodes:n=>n+'개 노드',nSess:n=>n+'개 세션',nPrompts:n=>n+'개 프롬프트',madeAt:t=>'생성 '+t},
  en:{map:'Map',timeline:'Timeline',open:'Open questions',sessions:'Sessions',
@@ -259,6 +262,7 @@ const STR = {
   children:'Children',related:'Related',srcDocs:'Sources',
   noDates:'No nodes carry dates',noOpen:'Nothing open',
   colPeriod:'Period',colTool:'Tool',colPrompt:'First prompt · linked nodes',noLinked:'not linked to the map',
+  exReason:'left out on purpose',
   legend:'click a node for detail · circle = expand/collapse · drag/wheel = pan/zoom',
   nNodes:n=>n+' nodes',nSess:n=>n+' sessions',nPrompts:n=>n+' prompts',madeAt:t=>'built '+t}
 };
@@ -560,7 +564,9 @@ function renderList(){
     const sc=document.getElementById('showchanged');
     if(sc) sc.onclick=()=>{ expandChanged(); setView('map'); fit(); };
   } else if(view==='sessions'){
-    const rows = sessions.slice().sort((a,b)=>a.start<b.start?1:-1).map(s=>{ const ns=(nodeBySession[s.sessionId]||[]); const cmd=resumeFor(s,s.sessionId); return `<tr><td class="n">${esc(s.start.slice(0,10))}<br>→ ${esc(s.end.slice(0,10))}</td><td class="n">${esc(s.source||'')}</td><td><div>${esc(s.firstPrompt||'')}</div><div style="font-size:12px;color:var(--muted)">${esc((s.cwd||'').replace(/^C:\\Users\\[^\\]+/,'~'))} · ${L.nPrompts(s.userPrompts)} · <a href="${fileUrl(s.digest)}" target="_blank">digest</a>${cmd?` · <code>${cmd}</code> <button class="cp" style="font-size:11px;padding:0 6px" onclick="rmCopy('${cmd}')">${L.copy}</button>`:''}</div><div style="margin-top:4px">${ns.map(relChip).join('')||`<span style="color:var(--muted);font-size:12px">${L.noLinked}</span>`}</div></td></tr>`; }).join('');
+    const rows = sessions.slice().sort((a,b)=>a.start<b.start?1:-1).map(s=>{ const ns=(nodeBySession[s.sessionId]||[]); const cmd=resumeFor(s,s.sessionId);
+      if(s.excluded) return `<tr class="ex"><td class="n">${esc(s.start.slice(0,10))}</td><td class="n">${esc(s.source||'')}</td><td><div>${esc(s.firstPrompt||'')}</div><div style="margin-top:4px"><span class="exbadge">${L.exReason}</span> <span style="font-size:12px;color:var(--muted)">${esc(s.excluded)}</span></div></td></tr>`;
+      return `<tr><td class="n">${esc(s.start.slice(0,10))}<br>→ ${esc(s.end.slice(0,10))}</td><td class="n">${esc(s.source||'')}</td><td><div>${esc(s.firstPrompt||'')}</div><div style="font-size:12px;color:var(--muted)">${esc((s.cwd||'').replace(/^C:\\Users\\[^\\]+/,'~'))} · ${L.nPrompts(s.userPrompts)} · <a href="${fileUrl(s.digest)}" target="_blank">digest</a>${cmd?` · <code>${cmd}</code> <button class="cp" style="font-size:11px;padding:0 6px" onclick="rmCopy('${cmd}')">${L.copy}</button>`:''}</div><div style="margin-top:4px">${ns.map(relChip).join('')||`<span style="color:var(--muted);font-size:12px">${L.noLinked}</span>`}</div></td></tr>`; }).join('');
     el.innerHTML=`<table class="sess"><thead><tr><th>${L.colPeriod}</th><th>${L.colTool}</th><th>${L.colPrompt}</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 }

@@ -41,6 +41,10 @@ else:
     ROOT = legacy if os.path.isdir(os.path.join(legacy, "maps")) else os.path.join(HOME, ".research-map")
 MAPS = os.path.join(ROOT, "maps")
 
+# Stamped into the prompt when the update button drives an agent, so the next
+# scan can tell the tool's own runs apart from real research.
+UPDATER_MARK = "[research-map:updater]"
+
 MAX_ASSISTANT_CHARS = 3500
 MAX_USER_CHARS = 4000
 MAX_SUMMARY_CHARS = 6000
@@ -278,8 +282,26 @@ DEFAULT_CONFIG = {
     "summary": "",
     "sources": [{"kind": "claude-code", "root": "~/.claude/projects"}],
     "include": {"cwdContains": [], "pathContains": [], "since": None, "until": None, "minPrompts": 1},
+    # Sessions that are deliberately not research. Kept with a reason so the map
+    # can say "left out on purpose" instead of looking like a hole.
+    "exclude": {"sessions": {}, "firstPromptContains": [UPDATER_MARK]},
     "memoryDirs": [],
 }
+
+
+def excluded_reason(meta, exc):
+    """Why this session is not research, or None."""
+    by_id = (exc or {}).get("sessions") or {}
+    sid = meta.get("sessionId") or ""
+    for k, why in by_id.items():
+        if sid == k or (len(k) >= 6 and sid.startswith(k)):
+            return why or "제외됨"
+    first = meta.get("firstPrompt") or ""
+    for frag in (exc or {}).get("firstPromptContains") or []:
+        if frag and frag in first:
+            return ("이 도구의 갱신 실행" if frag == UPDATER_MARK
+                    else "첫 프롬프트에 %r 포함" % frag)
+    return None
 
 
 def list_maps():
@@ -313,6 +335,13 @@ def load_config(name):
     inc = dict(DEFAULT_CONFIG["include"])
     inc.update(cfg.get("include") or {})
     cfg["include"] = inc
+    exc = json.loads(json.dumps(DEFAULT_CONFIG["exclude"]))
+    user_exc = cfg.get("exclude") or {}
+    exc["sessions"].update(user_exc.get("sessions") or {})
+    for f in user_exc.get("firstPromptContains") or []:
+        if f not in exc["firstPromptContains"]:
+            exc["firstPromptContains"].append(f)
+    cfg["exclude"] = exc
     return cfg
 
 
