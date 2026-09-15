@@ -33,14 +33,18 @@ description: 연구 지도 — 지금까지 LLM 과 진행한 연구 세션(Clau
 | Codex 스킬 | `~/.codex/skills/research-map/scripts/` |
 | Codex 플러그인 | `~/.codex/plugins/cache/*/research-map/*/skills/research-map/scripts/` |
 
-**세션에서 한 번** 아래를 돌려 `$RM` 을 확정하고, 이후 모든 명령에서 그 경로를 쓴다.
+**1순위 — 지금 읽고 있는 이 SKILL.md 옆의 `scripts/`.** 그 경로를 안다면 그걸 쓴다.
+같은 컴퓨터에 여러 벌이 설치돼 있을 수 있으므로 *다른* 사본을 부르면 버전이 갈린다.
+
+**2순위 — 자기 경로를 모르겠으면** 세션에서 한 번 아래를 돌려 `$RM` 을 확정한다.
 절대 경로를 추측하지 마라 — 없는 경로를 부르면 "스크립트가 패키지에 없다"로 오진하게 된다.
 
 ```
-python -c "import glob,os;c=[os.path.expanduser(x) for x in ['~/.claude/skills/research-map/scripts','~/.codex/skills/research-map/scripts']]+sorted(glob.glob(os.path.expanduser('~/.claude/plugins/cache/*/research-map/*/skills/research-map/scripts')))+sorted(glob.glob(os.path.expanduser('~/.codex/plugins/cache/*/research-map/*/skills/research-map/scripts')));h=[q for q in c if os.path.isdir(q)];print(h[0] if h else 'NOT FOUND')"
+python -c "import glob,os;H=os.path.expanduser;cx=[H('~/.codex/skills/research-map/scripts')]+sorted(glob.glob(H('~/.codex/plugins/cache/*/research-map/*/skills/research-map/scripts')));cl=[H('~/.claude/skills/research-map/scripts')]+sorted(glob.glob(H('~/.claude/plugins/cache/*/research-map/*/skills/research-map/scripts')));c=cx+cl if os.environ.get('CODEX_HOME') or os.path.isdir(H('~/.codex/skills/research-map')) and not os.path.isdir(H('~/.claude/skills/research-map')) else cl+cx;h=[q for q in c if os.path.isdir(q)];print(h[0] if h else 'NOT FOUND')"
 ```
 
-아래 명령의 `$RM` 은 전부 이 값이다. 못 찾으면 이 SKILL.md 가 있는 폴더의 `scripts/` 를 쓴다.
+아래 명령의 `$RM` 은 전부 이 값이다. `NOT FOUND` 면 설치가 안 된 것이니
+사용자에게 README 의 설치 절차를 안내한다.
 
 ## 절차 — 지도 갱신
 
