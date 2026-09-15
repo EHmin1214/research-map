@@ -26,14 +26,14 @@ any other LLM (ChatGPT, Gemini, Claude.ai …) as markdown/JSON files.
 **As a Claude Code plugin** (recommended)
 
 ```
-/plugin marketplace add <your-github-user>/research-map
+/plugin marketplace add EHmin1214/research-map
 /plugin install research-map@research-map
 ```
 
 **Or as a personal skill**
 
 ```bash
-git clone https://github.com/<your-github-user>/research-map
+git clone https://github.com/EHmin1214/research-map
 cd research-map
 bash install.sh          # macOS / Linux / Git Bash
 # powershell -ExecutionPolicy Bypass -File install.ps1     (Windows)
@@ -170,14 +170,14 @@ LLM 과 연구를 하다 보면 자기가 어떤 갈래를 파고 어떤 결론�
 플러그인으로 (권장):
 
 ```
-/plugin marketplace add <깃허브계정>/research-map
+/plugin marketplace add EHmin1214/research-map
 /plugin install research-map@research-map
 ```
 
 또는 개인 스킬로:
 
 ```bash
-git clone https://github.com/<깃허브계정>/research-map
+git clone https://github.com/EHmin1214/research-map
 cd research-map
 powershell -ExecutionPolicy Bypass -File install.ps1   # Windows
 bash install.sh                                        # macOS / Linux
