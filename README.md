@@ -89,6 +89,14 @@ Open the result at `~/.claude/research-map/maps/<name>/index.html`.
 Search (`/`) matches titles, summaries, evidence numbers and tags. Colour chips filter
 by node type and status.
 
+### What to do next
+
+Open questions are listed as individual items, not as a wall of nodes. Give an item a
+`due`, an `effort` (`quick` / `day` / `long`) or a `blockedBy` and it sorts to the top;
+leave those out and it folds into a collapsed tail. Anything blocked drops to its own
+section with the thing it waits on. On the reference map this turned 72 undifferentiated
+items into 14 you can act on today.
+
 ### Following up
 
 Every render diffs the map against the previous one and records a revision when something

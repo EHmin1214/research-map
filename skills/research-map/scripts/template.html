@@ -140,6 +140,22 @@ main{flex:1;display:flex;min-height:0;position:relative}
 .open-card{border:1px solid var(--line);border-left:4px solid var(--t-open);border-radius:8px;padding:10px 14px;margin:8px 0;background:var(--panel);cursor:pointer}
 .open-card:hover{border-color:var(--accent);border-left-color:var(--t-open)}
 .open-card .p{font-size:12px;color:var(--muted)}
+.qsec{margin:14px 0 6px;font-size:12px;color:var(--muted);letter-spacing:.04em;display:flex;gap:8px;align-items:baseline}
+.qsec b{color:var(--ink);font-size:13px;letter-spacing:0}
+.q{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:8px 12px;border:1px solid var(--line);border-left:3px solid var(--tc);border-radius:8px;margin:6px 0;background:var(--panel)}
+.q .t{font-size:13.5px}
+.q .m{grid-column:1/-1;display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.q .tag,#panel .tag{border-radius:999px;padding:1px 8px;font-size:11px;border:1px solid var(--line);white-space:nowrap}
+.q .tag.due,#panel .tag.due{border-color:var(--s-warn);color:var(--s-warn)}
+.q .tag.due.soon{background:var(--s-warn);color:#fff}
+.q .tag.eff,#panel .tag.eff{border-color:var(--line);color:var(--muted)}
+.q .why{font-style:italic}
+.q.blocked{opacity:.72;border-left-style:dashed}
+details.unsorted>summary{list-style:none;cursor:pointer}
+details.unsorted>summary::-webkit-details-marker{display:none}
+details.unsorted>summary .qsec::before{content:'▸';color:var(--muted)}
+details.unsorted[open]>summary .qsec::before{content:'▾'}
+.q .blk{color:var(--s-bad)}
 .open-card ul{margin:4px 0 0;padding-left:18px;font-size:13px}
 table.sess{border-collapse:collapse;width:100%;font-size:13px}
 table.sess th,table.sess td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
@@ -196,6 +212,9 @@ const STR = {
   stat:{ongoing:'진행 중',done:'완료',confirmed:'확인됨',refuted:'반증',withdrawn:'철회',
         inconclusive:'미결',abandoned:'중단',open:'열림',blocked:'막힘',planned:'계획'},
   changes:'변경',gapsOn:'채울 곳',gapTitle:'여기서 할 일',
+  qDoNow:'지금 할 수 있는 것',qWaiting:'기다리는 것',qNoNext:'다음 단계가 안 적힌 열린 갈래',
+  qUnsorted:'아직 기한·비용을 안 적은 것',
+  qBlockedBy:'막힘:',effort:{quick:'금방',day:'하루',long:'오래'},qDue:'기한',qToday:'오늘',qOver:'지남',
   gap:{noSummary:'요약 없음',noEvidence:'근거 수치 없음',noSources:'출처 없음',noNext:'다음 단계 없음'},
   mapTitle:'연구 지도',copied:'복사됨: ',copyFail:'복사 실패',copy:'복사',path:'경로',
   sinceSeen:'지난 방문 이후',markRead:'읽음으로 표시',showChanged:'바뀐 곳만 지도에서 펼치기',allRead:'새로운 변경 없음',baseline:'기준선',
@@ -215,6 +234,9 @@ const STR = {
   stat:{ongoing:'ongoing',done:'done',confirmed:'confirmed',refuted:'refuted',withdrawn:'withdrawn',
         inconclusive:'inconclusive',abandoned:'abandoned',open:'open',blocked:'blocked',planned:'planned'},
   changes:'Changes',gapsOn:'Gaps',gapTitle:'To fill in',
+  qDoNow:'Can do now',qWaiting:'Waiting on something',qNoNext:'Open branches with no next step',
+  qUnsorted:'Not yet given a due date or effort',
+  qBlockedBy:'blocked by',effort:{quick:'quick',day:'a day',long:'long'},qDue:'due',qToday:'today',qOver:'overdue',
   gap:{noSummary:'no summary',noEvidence:'no evidence',noSources:'no source',noNext:'no next step'},
   mapTitle:'Research map',copied:'Copied: ',copyFail:'Copy failed',copy:'Copy',path:'Path',
   sinceSeen:'Since you last looked',markRead:'Mark as read',showChanged:'Expand changed on the map',allRead:'Nothing new',baseline:'baseline',
@@ -370,7 +392,15 @@ function renderPanel(){
   if(gp.length) h+=`<h3>${L.gapTitle}</h3><div class="badges">${gp.map(k=>`<span class="badge" style="background:var(--s-warn)">${L.gap[k]||k}</span>`).join('')}</div>`;
   if(n.detail) h+=`<h3>${L.detail}</h3><div class="detail">${md(n.detail)}</div>`;
   if(n.evidence&&n.evidence.length) h+=`<h3>${L.evidence}</h3><ul class="plain">${n.evidence.map(e=>`<li>${md(e).replace(/^<p>|<\/p>$/g,'')}</li>`).join('')}</ul>`;
-  if(n.next&&n.next.length) h+=`<h3>${L.nextSteps}</h3><ul class="plain">${n.next.map(e=>`<li>${md(e).replace(/^<p>|<\/p>$/g,'')}</li>`).join('')}</ul>`;
+  const nx=(D.next||{})[n.id]||[];
+  if(nx.length) h+=`<h3>${L.nextSteps}</h3><ul class="plain">${nx.map(e=>{
+    const bits=[];
+    if(e.due) bits.push(`<span class="tag due">${L.qDue} ${esc(e.due)}</span>`);
+    if(e.effort) bits.push(`<span class="tag eff">${esc((L.effort||{})[e.effort]||e.effort)}</span>`);
+    if(e.blockedBy&&e.blockedBy.length) bits.push(`<span class="note">${L.qBlockedBy} ${e.blockedBy.map(b=>byId[b]?esc(byId[b].title):esc(b)).join(', ')}</span>`);
+    if(e.why) bits.push(`<span class="note why">${esc(e.why)}</span>`);
+    return `<li>${md(e.text).replace(/^<p>|<\/p>$/g,'')}${bits.length?' '+bits.join(' '):''}</li>`;
+  }).join('')}</ul>`;
   if(n.children.length) h+=`<h3>${L.children} (${n.children.length})</h3><div>${n.children.map(relChip).join('')}</div>`;
   if(rel.length) h+=`<h3>${L.related}</h3><div>${rel.map(relChip).join('')}</div>`;
   if(n.sources&&n.sources.length) h+=`<h3>${L.srcDocs} (${n.sources.length})</h3>${n.sources.map(srcRow).join('')}`;
@@ -397,11 +427,44 @@ function renderList(){
     dated.forEach(n=>{ const m=n.period.start.slice(0,7); if(m!==month){month=m; rows+=`<div class="tl-month">${m}</div>`;} const st=STATUS[n.status]||[n.status]; rows+=`<div class="tl-row"><div class="d">${esc(per(n))}<br><span style="color:var(--t-${n.type})">${TYPES[n.type]}</span> · ${st[0]}</div><div class="c" onclick="rmSelect('${n.id}')" style="--tc:var(--t-${n.type})"><b>${esc(n.title)}</b><div class="s">${esc(n.summary||'')}</div></div></div>`; });
     el.innerHTML=g+rows;
   } else if(view==='open'){
-    const opens = vis.filter(n=>n.type==='open' || (n.next&&n.next.length) || (n.type!=='topic' && ['ongoing','blocked','planned','inconclusive'].includes(n.status)));
-    if(!opens.length){el.innerHTML='<div class="empty">'+L.noOpen+'</div>';return;}
-    const groups={}; opens.forEach(n=>{ const top=pathOf(n)[0]; (groups[top.id]=groups[top.id]||[]).push(n); });
+    const NX = D.next||{};
+    const rank = {quick:0, day:1, long:2};
+    const today = new Date().toISOString().slice(0,10);
+    const rows=[], waiting=[], bare=[];
+    vis.forEach(n=>{
+      const items = NX[n.id]||[];
+      items.forEach(it=>{
+        const r = {node:n, it, top:pathOf(n)[0]};
+        (it.blockedBy && it.blockedBy.length ? waiting : rows).push(r);
+      });
+      if(!items.length && (n.type==='open' || ['blocked','planned'].includes(n.status))) bare.push(n);
+    });
+    if(!rows.length && !waiting.length && !bare.length){ el.innerHTML='<div class="empty">'+L.noOpen+'</div>'; return; }
+    const key = r => [ r.it.due || '9999-99-99',
+                       String(rank[r.it.effort] != null ? rank[r.it.effort] : 3),
+                       (r.node.period && r.node.period.end) ? r.node.period.end.split('').reverse().join('') : '' ].join('|');
+    rows.sort((a,b)=> key(a)<key(b) ? -1 : key(a)>key(b) ? 1 : 0);
+    waiting.sort((a,b)=> key(a)<key(b) ? -1 : 1);
+    const tagDue = d => { if(!d) return ''; const cls = d<today ? 'due soon' : (d<=today ? 'due soon' : 'due');
+      const lbl = d<today ? L.qOver : (d===today ? L.qToday : d);
+      return `<span class="tag ${cls}">${L.qDue} ${lbl}</span>`; };
+    const tagEff = e => e ? `<span class="tag eff">${(L.effort||{})[e]||e}</span>` : '';
+    const blk = it => (it.blockedBy||[]).map(b=> byId[b] ? relChip(byId[b]) : `<span class="blk">${esc(b)}</span>`).join(' ');
+    const row = (r, isBlocked) => `<div class="q${isBlocked?' blocked':''}" style="--tc:var(--t-${r.node.type})">
+      <div class="t">${esc(r.it.text)}</div><div>${tagDue(r.it.due)}${tagEff(r.it.effort)}</div>
+      <div class="m">${relChip(r.node)}<span>${esc(r.top.title)}</span>
+      ${r.it.why?`<span class="why">${esc(r.it.why)}</span>`:''}
+      ${isBlocked?`<span>${L.qBlockedBy}</span>${blk(r.it)}`:''}</div></div>`;
+    const sorted = rows.filter(r=>r.it.due||r.it.effort);
+    const unsorted = rows.filter(r=>!(r.it.due||r.it.effort));
     let h='';
-    Object.keys(groups).forEach(tid=>{ h+=`<div class="tl-month">${esc(byId[tid].title)}</div>`; groups[tid].forEach(n=>{ const st=STATUS[n.status]||[n.status]; h+=`<div class="open-card" onclick="rmSelect('${n.id}')"><div class="p">${TYPES[n.type]} · ${st[0]} · ${esc(per(n))}</div><b>${esc(n.title)}</b><div style="font-size:13px">${esc(n.summary||'')}</div>${n.next&&n.next.length?`<ul>${n.next.map(x=>`<li>${md(x).replace(/^<p>|<\/p>$/g,'')}</li>`).join('')}</ul>`:''}</div>`; }); });
+    if(sorted.length) h += `<div class="qsec"><b>${L.qDoNow}</b><span>${sorted.length}</span></div>` + sorted.map(r=>row(r,false)).join('');
+    if(waiting.length) h += `<div class="qsec"><b>${L.qWaiting}</b><span>${waiting.length}</span></div>` + waiting.map(r=>row(r,true)).join('');
+    if(unsorted.length) h += `<details class="unsorted"><summary><div class="qsec"><b>${L.qUnsorted}</b><span>${unsorted.length}</span></div></summary>`
+      + unsorted.map(r=>row(r,false)).join('') + `</details>`;
+    if(bare.length) h += `<div class="qsec"><b>${L.qNoNext}</b><span>${bare.length}</span></div>`
+      + bare.map(n=>`<div class="q" style="--tc:var(--t-${n.type})"><div class="t">${esc(n.title)}</div><div></div>
+        <div class="m">${relChip(n)}<span>${esc(pathOf(n)[0].title)}</span><span>${esc(n.summary||'')}</span></div></div>`).join('');
     el.innerHTML=h;
   } else if(view==='changes'){
     if(!REVS.length || (REVS.length===1 && REVS[0].baseline)){ el.innerHTML='<div class="empty">'+L.noHistory+'</div>'; return; }

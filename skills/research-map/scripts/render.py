@@ -26,6 +26,45 @@ GAP_LABEL = {
 }
 
 
+EFFORT = ("quick", "day", "long")        # under an hour / a day / longer
+
+
+def norm_next(n, ids, errs, warns):
+    """`next` items may be a plain string or {text, due, effort, blockedBy, why}."""
+    out = []
+    for it in n.get("next") or []:
+        if isinstance(it, str):
+            out.append({"text": it})
+            continue
+        if not isinstance(it, dict) or not it.get("text"):
+            errs.append("%s: next item needs text" % n["id"])
+            continue
+        d = {"text": it["text"]}
+        if it.get("due"):
+            try:
+                datetime.date(*[int(x) for x in str(it["due"]).split("-")])
+                d["due"] = it["due"]
+            except Exception:
+                errs.append("%s: bad due %r (use YYYY-MM-DD)" % (n["id"], it["due"]))
+        if it.get("effort"):
+            if it["effort"] in EFFORT:
+                d["effort"] = it["effort"]
+            else:
+                errs.append("%s: bad effort %r (%s)" % (n["id"], it["effort"], "|".join(EFFORT)))
+        bb = it.get("blockedBy") or []
+        if isinstance(bb, str):
+            bb = [bb]
+        if bb:
+            d["blockedBy"] = bb
+            for b in bb:
+                if b not in ids and b.replace("-", "").isalnum() and "-" in b:
+                    warns.append("%s: blockedBy %r looks like a node id but no such node" % (n["id"], b))
+        if it.get("why"):
+            d["why"] = it["why"]
+        out.append(d)
+    return out
+
+
 def gaps_of(n):
     g = []
     if not n.get("summary"):
@@ -100,7 +139,11 @@ def validate(m, cfg, sessions):
     tops = [n for n in nodes if n.get("parent") is None]
     if len(tops) > 9:
         warns.append("%d top-level topics (스키마 권고 9개 이하)" % len(tops))
-    return errs, warns, {n['id']: gaps_of(n) for n in nodes if n.get('id')}
+    nxt = {}
+    for n in nodes:
+        if n.get("id") and n.get("next"):
+            nxt[n["id"]] = norm_next(n, ids, errs, warns)
+    return errs, warns, {n['id']: gaps_of(n) for n in nodes if n.get('id')}, nxt
 
 
 def main():
@@ -121,7 +164,7 @@ def main():
     m = json.load(open(map_p, encoding="utf-8"))
     sessions = json.load(open(sess_p, encoding="utf-8")) if os.path.exists(sess_p) else []
 
-    errs, warns, gaps = validate(m, cfg, sessions)
+    errs, warns, gaps, nxt = validate(m, cfg, sessions)
     for w in warns:
         print("WARN  " + w)
     for e in errs:
@@ -131,6 +174,12 @@ def main():
     from collections import Counter
     print("[%s] nodes: %d  by type: %s" % (name, len(nodes), dict(Counter(n.get("type") for n in nodes))))
     print("        by status: %s" % dict(Counter(n.get("status") for n in nodes)))
+    allnext = [i for v in nxt.values() for i in v]
+    if allnext:
+        blocked = sum(1 for i in allnext if i.get("blockedBy"))
+        dated = sum(1 for i in allnext if i.get("due"))
+        print("        열린 항목 %d개 — 기한 있는 것 %d · 막힌 것 %d"
+              % (len(allnext), dated, blocked))
     flat = [k for v in gaps.values() for k in v]
     if flat:
         cnt = Counter(flat)
@@ -163,7 +212,7 @@ def main():
                                    "userPrompts", "firstPrompt", "digest", "compactions")}
             for s in sessions]
     data = {"map": m, "sessions": slim, "mapName": name, "lang": cfg.get("lang") or "ko",
-            "revisions": revs, "marks": marks, "gaps": {k: v for k, v in gaps.items() if v},
+            "revisions": revs, "marks": marks, "gaps": {k: v for k, v in gaps.items() if v}, "next": nxt,
             "resumeCmd": {"claude-code": "claude --resume ", "codex": "codex resume ", "markdown": ""},
             "generatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
     payload = "window.RM_DATA = " + json.dumps(data, ensure_ascii=False).replace("</", "<\\/") + ";"
