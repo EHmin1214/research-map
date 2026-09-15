@@ -84,9 +84,20 @@ Open the result at `~/.claude/research-map/maps/<name>/index.html`.
 | **Timeline** | When did I run that experiment? |
 | **Open questions** | What should I look at next? |
 | **Sessions** | Which conversation was that, and how do I resume it? |
+| **Changes** | What moved since I last looked? |
 
 Search (`/`) matches titles, summaries, evidence numbers and tags. Colour chips filter
 by node type and status.
+
+### Following up
+
+Every render diffs the map against the previous one and records a revision when something
+actually moved — no bookkeeping on your part. The **Changes** view then shows *since you
+last looked*: status flips written out as `inconclusive → refuted`, new nodes, and which
+nodes gained evidence or next steps. A badge in the header carries the count, and
+**Expand changed on the map** opens exactly the branches that moved and dims the rest.
+Your last-read position lives in the browser, so it tracks your visits rather than the
+build number.
 
 ## One map per research area
 
@@ -238,6 +249,7 @@ Python 3.8 이상만 있으면 되고 추가 설치는 없다.
 | **타임라인** | 그 실험 언제 했지 |
 | **열린 질문** | 다음에 뭘 파지 |
 | **세션** | 그게 어느 대화였고 어떻게 이어가지 |
+| **변경** | 지난번에 본 뒤로 뭐가 움직였나 |
 
 ## 연구마다 지도 하나
 

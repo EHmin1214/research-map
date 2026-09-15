@@ -12,6 +12,7 @@ import json, os, sys, argparse, datetime, webbrowser
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rmlib as R
+import rmhistory as H
 
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "template.html")
 TYPES = {"topic", "direction", "process", "result", "open", "artifact"}
@@ -118,10 +119,25 @@ def main():
     if args.check:
         return
 
+    # Record what moved since the last render. No movement -> no revision.
+    revs = H.record(d, m)
+    marks = H.node_marks(revs)
+    since = revs[-1]["rev"] - 1 if revs else 0
+    latest = H.summarise(revs, since)
+    if latest["added"] or latest["changed"]:
+        print("이번 판 rev%d — 새 노드 %d개 · 바뀐 노드 %d개"
+              % (revs[-1]["rev"], len(latest["added"]), len(latest["changed"])))
+        for f in latest["statusFlips"][:8]:
+            t = next((n.get("title") for n in nodes if n.get("id") == f["id"]), f["id"])
+            print("   상태 %s → %s   %s" % (f["from"], f["to"], t))
+    elif revs and revs[-1].get("baseline"):
+        print("변경 이력 기준선을 잡았습니다 (rev1). 다음 갱신부터 바뀐 것만 보입니다.")
+
     slim = [{k: s.get(k) for k in ("sessionId", "project", "source", "cwd", "start", "end",
                                    "userPrompts", "firstPrompt", "digest", "compactions")}
             for s in sessions]
     data = {"map": m, "sessions": slim, "mapName": name, "lang": cfg.get("lang") or "ko",
+            "revisions": revs, "marks": marks,
             "resumeCmd": {"claude-code": "claude --resume ", "codex": "codex resume ", "markdown": ""},
             "generatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
     payload = "window.RM_DATA = " + json.dumps(data, ensure_ascii=False).replace("</", "<\\/") + ";"

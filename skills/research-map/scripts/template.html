@@ -43,6 +43,28 @@ header .meta{color:var(--muted);font-size:12px}
 .chip{border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:12px;cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:5px;background:var(--panel)}
 .chip .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
 .chip.off{opacity:.38}
+#badge{border:1px solid var(--accent);color:var(--accent);background:transparent;border-radius:999px;padding:2px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+#badge.hide{display:none}
+.node .mk{position:absolute;right:6px;top:6px;width:8px;height:8px;border-radius:50%}
+.node.isnew .mk{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.node.isupd .mk{background:var(--s-warn)}
+.node .mk.sub{background:transparent;border:2px solid var(--accent);opacity:.65}
+.rev{border:1px solid var(--line);border-radius:8px;margin:10px 0;background:var(--panel);overflow:hidden}
+.rev>summary{list-style:none;cursor:pointer}
+.rev>summary::-webkit-details-marker{display:none}
+.rev h4{margin:0;padding:8px 12px;background:rgba(127,127,127,.08);font-size:13px;display:flex;gap:10px;align-items:baseline}
+.rev h4::before{content:'▸';color:var(--muted);font-size:11px}
+.rev[open] h4::before{content:'▾'}
+.rev h4 .n{color:var(--muted);font-weight:400;font-size:12px}
+.rev .body{padding:8px 12px}
+.rev .grp{font-size:12px;color:var(--muted);margin:8px 0 4px}
+.flip{display:flex;gap:8px;align-items:baseline;padding:3px 0;font-size:13px;flex-wrap:wrap}
+.flip .ar{color:var(--muted)}
+.chgline{font-size:13px;padding:3px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:baseline}
+.chgline .what{color:var(--muted);font-size:12px}
+.seen{margin:6px 0 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.since{border:1px solid var(--accent);border-radius:8px;padding:10px 14px;margin-bottom:14px;background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.since h3{margin:0 0 6px;font-size:13px;color:var(--accent);border:0;padding:0}
 /* main */
 main{flex:1;display:flex;min-height:0;position:relative}
 #stage{flex:1;position:relative;overflow:hidden;cursor:grab;background:
@@ -135,10 +157,12 @@ table.sess td.n{white-space:nowrap;color:var(--muted)}
     <button class="tab" data-view="timeline"></button>
     <button class="tab" data-view="open"></button>
     <button class="tab" data-view="sessions"></button>
+    <button class="tab" data-view="changes"></button>
   </div>
   <input type="search" id="q">
   <div class="chips" id="typeChips"></div>
   <div class="chips" id="statusChips"></div>
+  <button id="badge" class="hide"></button>
   <span class="sp"></span>
   <button id="expandAll"></button>
   <button id="collapseAll"></button>
@@ -169,7 +193,11 @@ const STR = {
   type:{topic:'주제',direction:'방향·가설',process:'과정·실험',result:'결과',open:'열린 질문',artifact:'산출물'},
   stat:{ongoing:'진행 중',done:'완료',confirmed:'확인됨',refuted:'반증',withdrawn:'철회',
         inconclusive:'미결',abandoned:'중단',open:'열림',blocked:'막힘',planned:'계획'},
-  mapTitle:'연구 지도',copied:'복사됨: ',copyFail:'복사 실패',copy:'복사',path:'경로',
+  changes:'변경',mapTitle:'연구 지도',copied:'복사됨: ',copyFail:'복사 실패',copy:'복사',path:'경로',
+  sinceSeen:'지난 방문 이후',markRead:'읽음으로 표시',showChanged:'바뀐 곳만 지도에서 펼치기',allRead:'새로운 변경 없음',baseline:'기준선',
+  newNodes:'새 노드',updNodes:'내용 바뀜',statusFlip:'상태 뒤집힘',removed:'삭제됨',
+  noHistory:'아직 변경 이력이 없습니다. 다음 갱신부터 쌓입니다.',
+  badge:(a,c)=>`새 ${a} · 바뀜 ${c}`,revAt:(r,t)=>`rev${r} · ${t}`,fieldAdd:(k,n)=>`${k} +${n}`,
   session:'세션',top:'최상위',detail:'상세',evidence:'근거·수치',nextSteps:'더 파볼 것',
   children:'하위',related:'관련',srcDocs:'출처·문서',
   noDates:'기간 정보가 있는 노드가 없습니다',noOpen:'열린 항목이 없습니다',
@@ -182,7 +210,11 @@ const STR = {
   type:{topic:'Topic',direction:'Direction',process:'Process',result:'Result',open:'Open question',artifact:'Artifact'},
   stat:{ongoing:'ongoing',done:'done',confirmed:'confirmed',refuted:'refuted',withdrawn:'withdrawn',
         inconclusive:'inconclusive',abandoned:'abandoned',open:'open',blocked:'blocked',planned:'planned'},
-  mapTitle:'Research map',copied:'Copied: ',copyFail:'Copy failed',copy:'Copy',path:'Path',
+  changes:'Changes',mapTitle:'Research map',copied:'Copied: ',copyFail:'Copy failed',copy:'Copy',path:'Path',
+  sinceSeen:'Since you last looked',markRead:'Mark as read',showChanged:'Expand changed on the map',allRead:'Nothing new',baseline:'baseline',
+  newNodes:'New nodes',updNodes:'Updated',statusFlip:'Status flipped',removed:'Removed',
+  noHistory:'No history yet. It starts accumulating from the next update.',
+  badge:(a,c)=>`${a} new · ${c} changed`,revAt:(r,t)=>`rev${r} · ${t}`,fieldAdd:(k,n)=>`${k} +${n}`,
   session:'session',top:'Top level',detail:'Detail',evidence:'Evidence',nextSteps:'Next steps',
   children:'Children',related:'Related',srcDocs:'Sources',
   noDates:'No nodes carry dates',noOpen:'Nothing open',
@@ -213,8 +245,21 @@ const nodeBySession={}; nodes.forEach(n=>(n.sources||[]).forEach(s=>{ if(s.kind=
 let store={}; try{ store=JSON.parse(localStorage.getItem('rm:'+(D.mapName||D.map.title||''))||'{}'); }catch(e){}
 const collapsed = new Set(store.collapsed || nodes.filter(n=>n.depth>=1 && n.children.length).map(n=>n.id));
 let view = 'map', selected = null, query='', typeOff=new Set(), statusOff=new Set();
+const REVS = D.revisions||[]; const CUR_REV = REVS.length ? REVS[REVS.length-1].rev : 0;
+let seenRev = (store.seenRev==null) ? 0 : store.seenRev;
+function since(rev){
+  const add=new Set(), chg=new Set(), flips=[], gone=[];
+  REVS.forEach(r=>{ if(r.rev<=rev||r.baseline) return;
+    (r.added||[]).forEach(i=>add.add(i));
+    (r.removed||[]).forEach(i=>gone.push(i));
+    (r.changed||[]).forEach(c=>{ chg.add(c.id);
+      if(c.fields && c.fields.status) flips.push({id:c.id, from:c.fields.status[0], to:c.fields.status[1], rev:r.rev}); });
+  });
+  chg.forEach(i=>{ if(add.has(i)) chg.delete(i); });
+  return {add, chg, flips, gone};
+}
 let tx=40, ty=40, scale=1;
-function save(){ try{ localStorage.setItem('rm:'+(D.mapName||D.map.title||''), JSON.stringify({collapsed:[...collapsed], selected, tx,ty,scale})); }catch(e){} }
+function save(){ try{ localStorage.setItem('rm:'+(D.mapName||D.map.title||''), JSON.stringify({collapsed:[...collapsed], selected, tx,ty,scale, seenRev})); }catch(e){} }
 if(store.tx!=null){tx=store.tx;ty=store.ty;scale=store.scale||1;}
 
 // ---- helpers
@@ -250,6 +295,20 @@ function layout(){
   place(ROOT,0,0);
   return vis;
 }
+let SEEN = {add:new Set(),chg:new Set(),flips:[],gone:[]};
+let SUB = new Set();                       // node has a changed descendant
+let focusChanged = false;  // after 'expand changed': keep the eye on what moved
+function rollUp(){
+  SUB = new Set();
+  const touched = new Set([...SEEN.add, ...SEEN.chg]);
+  touched.forEach(id=>{ let n=byId[id]; while(n && n.parentNode){ n=n.parentNode; if(!n.root) SUB.add(n.id); } });
+}
+function expandChanged(){
+  nodes.forEach(n=>{ if(n.depth>=1 && n.children.length) collapsed.add(n.id); });
+  [...SEEN.add, ...SEEN.chg].forEach(id=>{ const n=byId[id]; if(n) expandTo(n); });
+  focusChanged = true; save();
+}
+function clearFocus(){ if(focusChanged){ focusChanged=false; return true; } return false; }
 function renderMap(){
   const vis = layout();
   const world=document.getElementById('world'), svg=document.getElementById('edges'), box=document.getElementById('nodes');
@@ -262,11 +321,14 @@ function renderMap(){
   svg.innerHTML=paths;
   box.innerHTML = vis.map(n=>{
     const st=STATUS[n.status]||[n.status,'neutral']; const tc=`var(--t-${n.type})`;
-    const cls=['node']; if(n.root)cls.push('root'); if(n.id===selected)cls.push('sel'); if(matches(n))cls.push('match'); else if((anyMatch && !selPath.has(n.id)) || !passFilter(n)) cls.push('dim');
+    const cls=['node']; if(n.root)cls.push('root'); if(SEEN.add.has(n.id))cls.push('isnew'); else if(SEEN.chg.has(n.id))cls.push('isupd'); if(n.id===selected)cls.push('sel'); const onChange = SEEN.add.has(n.id)||SEEN.chg.has(n.id)||SUB.has(n.id);
+    if(matches(n))cls.push('match'); else if((anyMatch && !selPath.has(n.id)) || !passFilter(n) || (focusChanged && !n.root && !onChange)) cls.push('dim');
     const tg = n.children.length ? `<span class="tg" data-tg="${n.id}" title="${n._vis?L.collapse:L.expand}">${n._vis?'−':n.children.length}</span>` : '';
     const kind = n.root||n.type==='topic' ? '' : `<span class="k">${TYPES[n.type]||n.type}</span>`;
     const meta = n.root ? `<span>${L.nNodes(nodes.length)} · ${D.generatedAt||''}</span>` : `<span class="st"><i></i>${st[0]}</span><span>${esc(per(n))}</span>`;
-    return `<div class="${cls.join(' ')}" data-id="${n.id}" style="left:${n._x}px;top:${n._y}px;--tc:${tc};--sc:${SC[st[1]]};border-left-color:${tc}" title="${esc(n.summary||'')}">${kind}<div class="t">${esc(n.title)}</div><div class="m">${meta}</div>${tg}</div>`;
+    const own = SEEN.add.has(n.id)||SEEN.chg.has(n.id);
+    const mk = own ? '<span class="mk"></span>' : ((!n._vis && SUB.has(n.id)) ? '<span class="mk sub"></span>' : '');
+    return `<div class="${cls.join(' ')}" data-id="${n.id}" style="left:${n._x}px;top:${n._y}px;--tc:${tc};--sc:${SC[st[1]]};border-left-color:${tc}" title="${esc(n.summary||'')}">${mk}${kind}<div class="t">${esc(n.title)}</div><div class="m">${meta}</div>${tg}</div>`;
   }).join('');
   world.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
 }
@@ -332,13 +394,62 @@ function renderList(){
     let h='';
     Object.keys(groups).forEach(tid=>{ h+=`<div class="tl-month">${esc(byId[tid].title)}</div>`; groups[tid].forEach(n=>{ const st=STATUS[n.status]||[n.status]; h+=`<div class="open-card" onclick="rmSelect('${n.id}')"><div class="p">${TYPES[n.type]} · ${st[0]} · ${esc(per(n))}</div><b>${esc(n.title)}</b><div style="font-size:13px">${esc(n.summary||'')}</div>${n.next&&n.next.length?`<ul>${n.next.map(x=>`<li>${md(x).replace(/^<p>|<\/p>$/g,'')}</li>`).join('')}</ul>`:''}</div>`; }); });
     el.innerHTML=h;
+  } else if(view==='changes'){
+    if(!REVS.length || (REVS.length===1 && REVS[0].baseline)){ el.innerHTML='<div class="empty">'+L.noHistory+'</div>'; return; }
+    const nm = id => byId[id] ? esc(byId[id].title) : esc(id);
+    const chip = id => byId[id] ? relChip(byId[id]) : `<span class="rel" style="--tc:var(--muted)">${esc(id)}</span>`;
+    const stat = k => (STATUS[k]||[k])[0];
+    let h='';
+    const fresh = SEEN.add.size + SEEN.chg.size + SEEN.flips.length;
+    h += `<div class="seen"><button id="markread" class="primary">${L.markRead}</button>`
+      +  (fresh? `<button id="showchanged">${L.showChanged}</button>` : '')
+      +  `<span style="color:var(--muted);font-size:12px">${fresh? L.badge(SEEN.add.size, SEEN.chg.size) : L.allRead} · rev${seenRev} → rev${CUR_REV}</span></div>`;
+    if(fresh){
+      h += `<div class="since"><h3>${L.sinceSeen}</h3>`;
+      if(SEEN.flips.length) h += `<div class="grp">${L.statusFlip}</div>` + SEEN.flips.map(f=>
+        `<div class="flip">${chip(f.id)}<span>${stat(f.from)}</span><span class="ar">→</span><b>${stat(f.to)}</b></div>`).join('');
+      if(SEEN.add.size) h += `<div class="grp">${L.newNodes} (${SEEN.add.size})</div><div>${[...SEEN.add].map(chip).join('')}</div>`;
+      if(SEEN.chg.size) h += `<div class="grp">${L.updNodes} (${SEEN.chg.size})</div><div>${[...SEEN.chg].map(chip).join('')}</div>`;
+      if(SEEN.gone.length) h += `<div class="grp">${L.removed}</div><div>${SEEN.gone.map(nm).join(', ')}</div>`;
+      h += `</div>`;
+    }
+    REVS.slice().reverse().forEach(r=>{
+      const cnt = r.baseline ? L.baseline : L.badge((r.added||[]).length, (r.changed||[]).length);
+      h += `<details class="rev"><summary><h4>${L.revAt(r.rev, esc(r.at||''))}<span class="n">${cnt} · ${r.nodes} nodes</span></h4></summary>`;
+      if(r.baseline){ h+='</details>'; return; }
+      h += '<div class="body">';
+      const flips=(r.changed||[]).filter(c=>c.fields && c.fields.status);
+      if(flips.length) h += `<div class="grp">${L.statusFlip}</div>` + flips.map(c=>
+        `<div class="flip">${chip(c.id)}<span>${stat(c.fields.status[0])}</span><span class="ar">→</span><b>${stat(c.fields.status[1])}</b></div>`).join('');
+      if((r.added||[]).length) h += `<div class="grp">${L.newNodes}</div><div>${r.added.map(chip).join('')}</div>`;
+      const rest=(r.changed||[]).filter(c=>!(c.fields && c.fields.status));
+      if(rest.length){ h += `<div class="grp">${L.updNodes}</div>` + rest.map(c=>{
+          const w=Object.keys(c.fields||{}).map(k=>{ const v=c.fields[k];
+            return (v && typeof v==='object' && v.added!=null) ? L.fieldAdd(k, v.added) : k; }).join(' · ');
+          return `<div class="chgline">${chip(c.id)}<span class="what">${esc(w)}</span></div>`; }).join('');
+      }
+      if((r.removed||[]).length) h += `<div class="grp">${L.removed}</div><div>${r.removed.map(nm).join(', ')}</div>`;
+      h += '</div></details>';
+    });
+    el.innerHTML=h;
+    const mr=document.getElementById('markread');
+    if(mr) mr.onclick=()=>{ seenRev=CUR_REV; save(); renderAll(); };
+    const sc=document.getElementById('showchanged');
+    if(sc) sc.onclick=()=>{ expandChanged(); setView('map'); fit(); };
   } else if(view==='sessions'){
     const rows = sessions.slice().sort((a,b)=>a.start<b.start?1:-1).map(s=>{ const ns=(nodeBySession[s.sessionId]||[]); const cmd=resumeFor(s,s.sessionId); return `<tr><td class="n">${esc(s.start.slice(0,10))}<br>→ ${esc(s.end.slice(0,10))}</td><td class="n">${esc(s.source||'')}</td><td><div>${esc(s.firstPrompt||'')}</div><div style="font-size:12px;color:var(--muted)">${esc((s.cwd||'').replace(/^C:\\Users\\[^\\]+/,'~'))} · ${L.nPrompts(s.userPrompts)} · <a href="${fileUrl(s.digest)}" target="_blank">digest</a>${cmd?` · <code>${cmd}</code> <button class="cp" style="font-size:11px;padding:0 6px" onclick="rmCopy('${cmd}')">${L.copy}</button>`:''}</div><div style="margin-top:4px">${ns.map(relChip).join('')||`<span style="color:var(--muted);font-size:12px">${L.noLinked}</span>`}</div></td></tr>`; }).join('');
     el.innerHTML=`<table class="sess"><thead><tr><th>${L.colPeriod}</th><th>${L.colTool}</th><th>${L.colPrompt}</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 }
 function setView(v){ view=v; const h=location.hash.replace(/&?view=[a-z]+/,''); location.hash=(h.replace('#','')?h+'&':'#')+'view='+v; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.view===v)); document.getElementById('stage').style.display = v==='map'?'':'none'; renderAll(); }
-function renderAll(){ if(view==='map') renderMap(); renderList(); renderPanel(); }
+function updateBadge(){
+  const b=document.getElementById('badge'); if(!b) return;
+  const n=SEEN.add.size+SEEN.chg.size;
+  b.classList.toggle('hide', n===0);
+  b.textContent=L.badge(SEEN.add.size, SEEN.chg.size);
+  b.onclick=()=>setView('changes');
+}
+function renderAll(){ SEEN=since(seenRev); rollUp(); updateBadge(); if(view==='map') renderMap(); renderList(); renderPanel(); }
 
 // ---- chips & legend
 function chips(){
@@ -360,13 +471,20 @@ function chips(){
   stage.addEventListener('dblclick',e=>{ const nd=e.target.closest('.node'); if(nd && byId[nd.dataset.id] && byId[nd.dataset.id].children.length){ const id=nd.dataset.id; collapsed.has(id)?collapsed.delete(id):collapsed.add(id); save(); renderMap(); } });
   document.getElementById('zoom').onclick=e=>{ const b=e.target.closest('button'); if(!b)return; const r=stage.getBoundingClientRect(); const mx=r.width/2,my=r.height/2; const f=b.dataset.z==='1'?1.2:1/1.2; const ns=Math.min(2.5,Math.max(.2,scale*f)); tx=mx-(mx-tx)*ns/scale; ty=my-(my-ty)*ns/scale; scale=ns; renderMap(); save(); };
   document.getElementById('fit').onclick=fit;
-  document.getElementById('expandAll').onclick=()=>{ collapsed.clear(); save(); renderMap(); };
-  document.getElementById('collapseAll').onclick=()=>{ nodes.forEach(n=>{ if(n.depth>=1&&n.children.length) collapsed.add(n.id); }); save(); renderMap(); };
+  document.getElementById('expandAll').onclick=()=>{ collapsed.clear(); focusChanged=false; save(); renderMap(); };
+  document.getElementById('collapseAll').onclick=()=>{ nodes.forEach(n=>{ if(n.depth>=1&&n.children.length) collapsed.add(n.id); }); focusChanged=false; save(); renderMap(); };
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setView(b.dataset.view));
   const q=document.getElementById('q'); let t; q.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(()=>{ query=q.value.trim(); if(query){ nodes.filter(matches).forEach(expandTo);} renderAll(); },200); });
   q.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const m=nodes.filter(matches); if(m.length){ select(m[0].id,{goMap:view==='map',center:true}); } } if(e.key==='Escape'){ q.value=''; query=''; renderAll(); } });
-  window.addEventListener('keydown',e=>{ if(e.key==='Escape' && document.activeElement!==q){ selected=null; renderAll(); } if(e.key==='/' && document.activeElement!==q){ e.preventDefault(); q.focus(); } });
+  window.addEventListener('keydown',e=>{ if(e.key==='Escape' && document.activeElement!==q){ clearFocus(); selected=null; renderAll(); } if(e.key==='/' && document.activeElement!==q){ e.preventDefault(); q.focus(); } });
   window.addEventListener('resize',()=>{ if(view==='map') renderMap(); });
+  window.addEventListener('hashchange',()=>{            // deep links must work on an open page too
+    const h=location.hash;
+    const v=h.match(/view=(map|timeline|open|sessions|changes)/);
+    if(v && v[1]!==view) setView(v[1]);
+    const n=h.match(/node=([^&]+)/);
+    if(n){ const id=decodeURIComponent(n[1]); if(byId[id] && id!==selected) select(id,{center:true}); }
+  });
 })();
 
 // ---- init
@@ -377,13 +495,14 @@ chips();
 (function(){ const set=(sel,txt,tip)=>{const e=document.querySelector(sel); if(e){e.textContent=txt; if(tip)e.title=tip;}};
   set('.tab[data-view=map]',L.map); set('.tab[data-view=timeline]',L.timeline);
   set('.tab[data-view=open]',L.open); set('.tab[data-view=sessions]',L.sessions);
+  set('.tab[data-view=changes]',L.changes);
   document.getElementById('q').placeholder=L.searchPh;
   set('#expandAll',L.expand,L.expandT); set('#collapseAll',L.collapse,L.collapseT); set('#fit',L.fit,L.fitT);
 })();
 const hash = location.hash.match(/node=([^&]+)/);
 if(hash && byId[decodeURIComponent(hash[1])]){ selected=decodeURIComponent(hash[1]); expandTo(byId[selected]); }
 else if(store.selected && byId[store.selected]) selected=store.selected;
-const hv = location.hash.match(/view=(map|timeline|open|sessions)/); if(hv){ view=hv[1]; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.view===view)); document.getElementById('stage').style.display = view==='map'?'':'none'; }
+const hv = location.hash.match(/view=(map|timeline|open|sessions|changes)/); if(hv){ view=hv[1]; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.view===view)); document.getElementById('stage').style.display = view==='map'?'':'none'; }
 if(store.tx==null) fit(); else renderAll();
 if(selected && store.tx==null){ layout(); centerOn(byId[selected]); renderAll(); }
 })();

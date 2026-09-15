@@ -18,9 +18,10 @@ description: 연구 지도 — 지금까지 LLM 과 진행한 연구 세션(Clau
 | `scripts/rmlib.py` | 지도 관리 + **소스 어댑터**(claude-code · codex · markdown) |
 | `scripts/extract.py` | 대화 기록 → 세션별 digest(md) + `sessions.json`. 증분 |
 | `scripts/render.py` | `map.json` 검증 + `index.html` 생성 (단일 파일, 외부 의존 없음) |
+| `scripts/rmhistory.py` | 렌더할 때마다 지도가 뭐가 움직였는지 자동 기록 (손으로 적을 필요 없음) |
 | `MAP_SCHEMA.md` | 지도 노드 스키마 · 작성 규칙 (**갱신 전에 반드시 읽는다**) |
 | `CARD_SCHEMA.md` | 세션 카드 스키마 (서브에이전트가 digest 를 읽고 쓰는 중간 산출물) |
-| `~/.claude/research-map/maps/<지도>/` | `config.json` · `map.json` · `sessions.json` · `state.json` · `cards/` · `digests/` · `index.html` |
+| `<지도 폴더>` | `config.json` · `map.json` · `sessions.json` · `state.json` · `cards/` · `digests/` · `history/` · `index.html` |
 
 ## 스크립트 경로 먼저 확정 (설치 방식마다 다름)
 
@@ -85,7 +86,14 @@ python "$RM/extract.py" --map <지도>
 python "$RM/render.py" --map <지도> --open
 ```
 ERROR 가 있으면 map.json 을 고친다. WARN(경로 없음, 출처 없음, 인덱스에 없는 세션)도
-가능하면 없앤다. 사용자에게는 `index.html` 경로와 이번에 **새로 추가/변경된 노드**를 알려준다.
+가능하면 없앤다.
+
+**변경 이력은 자동이다.** 렌더러가 직전 판과 비교해 달라진 게 있을 때만 리비전을 남기고,
+`이번 판 rev N — 새 노드 a개 · 바뀐 노드 b개` 와 상태 뒤집힘 목록을 출력한다.
+**그 출력을 그대로 사용자에게 보고한다** — 지도 전체를 다시 설명하지 말고 이번에 움직인 것만.
+사용자는 페이지의 **변경** 탭에서 "지난 방문 이후" 를 따로 본다(브라우저에 마지막으로 본
+리비전이 저장된다). 같은 지도를 다시 렌더해도 달라진 게 없으면 리비전은 안 쌓인다.
+첫 렌더는 `기준선(rev1)` 이라 변경이 안 보이는 게 정상이다.
 
 ## 절차 — 새 지도 만들기
 
@@ -128,6 +136,7 @@ markdown 소스 폴더에 파일로 넣으면 된다. `## User` / `## Assistant`
 - "다음에 뭘 파지?" → 상단 탭 **열린 질문**
 - "그 실험 언제 했지?" → 탭 **타임라인**
 - "그때 대화 이어가기" → 노드 패널의 이어가기 명령 복사 버튼, 또는 탭 **세션**
+- "지난번 이후 뭐가 바뀌었지?" → 탭 **변경** (헤더 배지 → 바뀐 곳만 지도에서 펼치기)
 
 ## 갱신 원칙
 - 지도는 **누적**된다. 새로 만들 때마다 처음부터 쓰지 않는다.
