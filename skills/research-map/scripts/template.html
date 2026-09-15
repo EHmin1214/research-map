@@ -65,6 +65,14 @@ header .meta{color:var(--muted);font-size:12px}
 .chgline{font-size:13px;padding:3px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:baseline}
 .chgline .what{color:var(--muted);font-size:12px}
 .seen{margin:6px 0 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.upd{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:14px;background:var(--panel)}
+.upd h3{margin:0 0 4px;font-size:13px;border:0;padding:0;color:var(--ink);text-transform:none;letter-spacing:0}
+.upd .hint{color:var(--muted);font-size:12px;margin-bottom:8px}
+.upd .btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.upd button[disabled]{opacity:.45;cursor:default}
+.upd .spin{color:var(--accent);font-size:12px}
+.upd pre{margin:10px 0 0;max-height:280px;overflow:auto;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.upd pre:empty{display:none}
 .since{border:1px solid var(--accent);border-radius:8px;padding:10px 14px;margin-bottom:14px;background:color-mix(in srgb,var(--accent) 6%,transparent)}
 .since h3{margin:0 0 6px;font-size:13px;color:var(--accent);border:0;padding:0}
 /* main */
@@ -211,7 +219,9 @@ const STR = {
   type:{topic:'주제',direction:'방향·가설',process:'과정·실험',result:'결과',open:'열린 질문',artifact:'산출물'},
   stat:{ongoing:'진행 중',done:'완료',confirmed:'확인됨',refuted:'반증',withdrawn:'철회',
         inconclusive:'미결',abandoned:'중단',open:'열림',blocked:'막힘',planned:'계획'},
-  changes:'변경',gapsOn:'채울 곳',gapTitle:'여기서 할 일',
+  changes:'변경',updTitle:'이 지도 갱신',updHint:'1단계는 기록만 훑습니다(공짜). 2단계가 에이전트를 불러 카드·병합까지 합니다(토큰을 씁니다).',
+  updScan:'새 세션 확인',updRun:'지도 갱신',updRunning:'도는 중…',updDone:'끝났습니다 — 새로고침합니다',updFail:'실패했습니다. 아래 기록을 보세요.',
+  gapsOn:'채울 곳',gapTitle:'여기서 할 일',
   qDoNow:'지금 할 수 있는 것',qWaiting:'기다리는 것',qNoNext:'다음 단계가 안 적힌 열린 갈래',
   qUnsorted:'아직 기한·비용을 안 적은 것',
   qBlockedBy:'막힘:',effort:{quick:'금방',day:'하루',long:'오래'},qDue:'기한',qToday:'오늘',qOver:'지남',
@@ -233,7 +243,9 @@ const STR = {
   type:{topic:'Topic',direction:'Direction',process:'Process',result:'Result',open:'Open question',artifact:'Artifact'},
   stat:{ongoing:'ongoing',done:'done',confirmed:'confirmed',refuted:'refuted',withdrawn:'withdrawn',
         inconclusive:'inconclusive',abandoned:'abandoned',open:'open',blocked:'blocked',planned:'planned'},
-  changes:'Changes',gapsOn:'Gaps',gapTitle:'To fill in',
+  changes:'Changes',updTitle:'Update this map',updHint:'Step 1 only reads transcripts (free). Step 2 calls the agent to write cards and merge (this spends tokens).',
+  updScan:'Check for new sessions',updRun:'Update the map',updRunning:'running…',updDone:'done — reloading',updFail:'failed. See the log below.',
+  gapsOn:'Gaps',gapTitle:'To fill in',
   qDoNow:'Can do now',qWaiting:'Waiting on something',qNoNext:'Open branches with no next step',
   qUnsorted:'Not yet given a due date or effort',
   qBlockedBy:'blocked by',effort:{quick:'quick',day:'a day',long:'long'},qDue:'due',qToday:'today',qOver:'overdue',
@@ -273,7 +285,33 @@ const nodeBySession={}; nodes.forEach(n=>(n.sources||[]).forEach(s=>{ if(s.kind=
 let store={}; try{ store=JSON.parse(localStorage.getItem('rm:'+(D.mapName||D.map.title||''))||'{}'); }catch(e){}
 const collapsed = new Set(store.collapsed || nodes.filter(n=>n.depth>=1 && n.children.length).map(n=>n.id));
 let view = 'map', selected = null, query='', typeOff=new Set(), statusOff=new Set();
+const SRV = window.RM_SERVE || null;
 const REVS = D.revisions||[]; const CUR_REV = REVS.length ? REVS[REVS.length-1].rev : 0;
+let jobSeen = 0, jobTimer = null;
+function srvUrl(p){ return p + (p.indexOf('?')<0?'?':'&') + 't=' + encodeURIComponent(SRV.token); }
+function srvLog(t, append){ const el=document.getElementById('updlog'); if(!el) return;
+  if(append) el.textContent += (el.textContent?'\n':'') + t; else el.textContent = t;
+  el.scrollTop = el.scrollHeight; }
+function srvBusy(on, what){
+  ['btnscan','btnrun'].forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled=on; });
+  const sp=document.getElementById('updspin'); if(sp) sp.textContent = on ? (what+' '+L.updRunning) : '';
+}
+function srvPoll(after){
+  clearTimeout(jobTimer);
+  jobTimer = setTimeout(()=>{ fetch(srvUrl('/api/job?since='+jobSeen)).then(r=>r.json()).then(j=>{
+    if(j.lines && j.lines.length){ jobSeen = j.total; srvLog(j.lines.join('\n'), true); }
+    if(!j.done){ srvPoll(after); return; }
+    srvBusy(false,'');
+    if(j.rc!==0) srvLog('— '+L.updFail, true); else if(after) after();
+  }).catch(()=>{ srvBusy(false,''); srvLog('— 서버와 끊겼습니다', true); }); }, 600);
+}
+function srvRun(path, label, after){
+  jobSeen = 0; srvLog(''); srvBusy(true, label);
+  fetch(srvUrl(path), {method:'POST'}).then(r=>r.json()).then(j=>{
+    if(!j.started){ srvBusy(false,''); srvLog('다른 작업이 아직 돌고 있습니다.'); return; }
+    srvPoll(after);
+  }).catch(e=>{ srvBusy(false,''); srvLog('요청 실패: '+e); });
+}
 let seenRev = (store.seenRev==null) ? 0 : store.seenRev;
 function since(rev){
   const add=new Set(), chg=new Set(), flips=[], gone=[];
@@ -467,11 +505,18 @@ function renderList(){
         <div class="m">${relChip(n)}<span>${esc(pathOf(n)[0].title)}</span><span>${esc(n.summary||'')}</span></div></div>`).join('');
     el.innerHTML=h;
   } else if(view==='changes'){
-    if(!REVS.length || (REVS.length===1 && REVS[0].baseline)){ el.innerHTML='<div class="empty">'+L.noHistory+'</div>'; return; }
+    if(!REVS.length && !SRV){ el.innerHTML='<div class="empty">'+L.noHistory+'</div>'; return; }
+    let srvPanel = '';
+    if(SRV){
+      srvPanel = `<div class="upd"><h3>${L.updTitle}</h3><div class="hint">${L.updHint}</div>
+        <div class="btns"><button id="btnscan">1 · ${L.updScan}</button>
+        <button id="btnrun" class="primary">2 · ${L.updRun}</button>
+        <span class="spin" id="updspin"></span></div><pre id="updlog"></pre></div>`;
+    }
     const nm = id => byId[id] ? esc(byId[id].title) : esc(id);
     const chip = id => byId[id] ? relChip(byId[id]) : `<span class="rel" style="--tc:var(--muted)">${esc(id)}</span>`;
     const stat = k => (STATUS[k]||[k])[0];
-    let h='';
+    let h=srvPanel;
     const fresh = SEEN.add.size + SEEN.chg.size + SEEN.flips.length;
     h += `<div class="seen"><button id="markread" class="primary">${L.markRead}</button>`
       +  (fresh? `<button id="showchanged">${L.showChanged}</button>` : '')
@@ -485,6 +530,7 @@ function renderList(){
       if(SEEN.gone.length) h += `<div class="grp">${L.removed}</div><div>${SEEN.gone.map(nm).join(', ')}</div>`;
       h += `</div>`;
     }
+    if(REVS.length===1 && REVS[0].baseline) h += `<div class="empty" style="padding:20px">${L.noHistory}</div>`;
     REVS.slice().reverse().forEach(r=>{
       const cnt = r.baseline ? L.baseline : L.badge((r.added||[]).length, (r.changed||[]).length);
       h += `<details class="rev"><summary><h4>${L.revAt(r.rev, esc(r.at||''))}<span class="n">${cnt} · ${r.nodes} nodes</span></h4></summary>`;
@@ -506,6 +552,11 @@ function renderList(){
     el.innerHTML=h;
     const mr=document.getElementById('markread');
     if(mr) mr.onclick=()=>{ seenRev=CUR_REV; save(); renderAll(); };
+    if(SRV){
+      const bs=document.getElementById('btnscan'), br=document.getElementById('btnrun');
+      if(bs) bs.onclick=()=>srvRun('/api/scan', '1');
+      if(br) br.onclick=()=>srvRun('/api/update', '2', ()=>{ srvLog('— '+L.updDone, true); setTimeout(()=>location.reload(), 900); });
+    }
     const sc=document.getElementById('showchanged');
     if(sc) sc.onclick=()=>{ expandChanged(); setView('map'); fit(); };
   } else if(view==='sessions'){

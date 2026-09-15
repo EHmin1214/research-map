@@ -76,6 +76,25 @@ read them into per-session cards, merges those into `map.json`, and renders the 
 
 Open the result at `~/.claude/research-map/maps/<name>/index.html`.
 
+### Updating from the page
+
+`index.html` is a static file, so on its own it cannot run anything — and the two middle
+steps of an update need an agent's judgement anyway. Run it with a local server instead
+and the page gets buttons:
+
+```bash
+python <skill-dir>/scripts/render.py --map <name> --serve
+```
+
+On Windows, `open-map.bat` does this for you. The panel in the **Changes** view has two
+deliberately separate steps: **check for new sessions** only reads transcripts and costs
+nothing, and **update the map** hands the merge to the agent CLI, which spends tokens.
+Output streams into the page and it reloads itself when the update lands.
+
+The server binds `127.0.0.1` only and every request carries a token minted at startup, so
+nothing is reachable from the network. Double-clicking `index.html` still gives you the
+plain read-only page.
+
 ### The four views
 
 | View | Answers |

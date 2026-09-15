@@ -6,6 +6,7 @@ research-map renderer: map.json + sessions.json -> index.html (single file, no C
   python render.py                  # 지도가 하나면 그것을 렌더
   python render.py --map mystudy --open
   python render.py --map mystudy --check    # 검증만 (경로·출처·순환·고아 노드)
+  python render.py --map mystudy --serve    # 페이지에서 갱신 버튼을 쓰는 로컬 서버
   python render.py --map mystudy --out D:\\share\\map.html
 """
 import json, os, sys, argparse, datetime, webbrowser
@@ -152,6 +153,9 @@ def main():
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--open", action="store_true")
     ap.add_argument("--out")
+    ap.add_argument("--serve", action="store_true",
+                    help="렌더한 뒤 localhost 서버를 띄워 페이지에서 갱신 버튼을 쓴다")
+    ap.add_argument("--port", type=int, default=8787)
     args = ap.parse_args()
 
     name = R.resolve_map(args.map)
@@ -223,6 +227,11 @@ def main():
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(html)
     print("wrote %s (%d KB)" % (out, len(html.encode("utf-8")) // 1024))
+    if args.serve:
+        import rmserve
+        rmserve.serve(name, d, os.path.dirname(os.path.abspath(__file__)),
+                      port=args.port, open_browser=True)
+        return
     if args.open:
         webbrowser.open("file:///" + os.path.abspath(out).replace("\\", "/"))
 

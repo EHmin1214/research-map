@@ -19,6 +19,7 @@ description: 연구 지도 — 지금까지 LLM 과 진행한 연구 세션(Clau
 | `scripts/extract.py` | 대화 기록 → 세션별 digest(md) + `sessions.json`. 증분 |
 | `scripts/render.py` | `map.json` 검증 + `index.html` 생성 (단일 파일, 외부 의존 없음) |
 | `scripts/rmhistory.py` | 렌더할 때마다 지도가 뭐가 움직였는지 자동 기록 (손으로 적을 필요 없음) |
+| `scripts/rmserve.py` | `--serve` 로컬 서버 — 페이지의 갱신 버튼이 여기로 붙는다 |
 | `MAP_SCHEMA.md` | 지도 노드 스키마 · 작성 규칙 (**갱신 전에 반드시 읽는다**) |
 | `CARD_SCHEMA.md` | 세션 카드 스키마 (서브에이전트가 digest 를 읽고 쓰는 중간 산출물) |
 | `<지도 폴더>` | `config.json` · `map.json` · `sessions.json` · `state.json` · `cards/` · `digests/` · `history/` · `index.html` |
@@ -88,6 +89,8 @@ python "$RM/extract.py" --map <지도>
 ```
 python "$RM/render.py" --map <지도> --open
 ```
+사용자가 **페이지의 갱신 버튼**으로 부른 경우(`--serve` 서버가 실행) `--open` 없이 렌더한다.
+버튼이 페이지를 알아서 새로고침한다.
 ERROR 가 있으면 map.json 을 고친다. WARN(경로 없음, 인덱스에 없는 세션)도 가능하면 없앤다.
 
 **`채울 곳:` 줄이 나오면 그냥 넘기지 마라.** 결과 노드에 근거 수치가 없다는 건 클릭해도
