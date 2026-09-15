@@ -9,7 +9,7 @@ description: 연구 지도 — 지금까지 LLM 과 진행한 연구 세션(Clau
 이 스킬은 세션 기록·메모리·문서를 **한 장의 지도**로 만든다. 노드를 클릭하면 요약·근거 수치·
 더 파볼 것·원본 세션(`claude --resume` / `codex resume`)·문서 링크가 나온다.
 
-**지도는 연구 영역마다 하나씩** 만든다. TIS 논문과 다른 과제를 한 지도에 섞지 않는다.
+**지도는 연구 영역마다 하나씩** 만든다. 서로 다른 과제를 한 지도에 섞지 않는다.
 
 ## 파일
 
@@ -75,7 +75,7 @@ python ~/.claude/skills/research-map/scripts/extract.py --init <이름> --title 
 
 | include 키 | 뜻 |
 |---|---|
-| `cwdContains` | 세션의 작업 폴더에 이 문자열이 있으면 포함 (예: `["Taemin\\tip"]`) |
+| `cwdContains` | 세션의 작업 폴더에 이 문자열이 있으면 포함 (예: `["projects/rat"]`) |
 | `pathContains` | 기록 파일 경로로 거르기 |
 | `since` / `until` | `"YYYY-MM-DD"` 기간 |
 | `minPrompts` | 사용자 프롬프트가 이보다 적은 세션은 버림 |

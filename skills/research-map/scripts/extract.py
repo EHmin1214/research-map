@@ -4,8 +4,8 @@
 research-map extractor — transcripts -> per-session digests + session index.
 
   python extract.py                       # 지도가 하나면 그것을, 여럿이면 --map 필요
-  python extract.py --map tis             # 증분: 새로 생기거나 길어진 세션만
-  python extract.py --map tis --all       # 전체 재생성
+  python extract.py --map mystudy             # 증분: 새로 생기거나 길어진 세션만
+  python extract.py --map mystudy --all       # 전체 재생성
   python extract.py --list-maps
   python extract.py --init rat --title "랫 실험 지도"
   python extract.py --init chat --title "ChatGPT 연구" \

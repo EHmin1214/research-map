@@ -4,9 +4,9 @@
 research-map renderer: map.json + sessions.json -> index.html (single file, no CDN).
 
   python render.py                  # 지도가 하나면 그것을 렌더
-  python render.py --map tis --open
-  python render.py --map tis --check    # 검증만 (경로·출처·순환·고아 노드)
-  python render.py --map tis --out D:\\share\\map.html
+  python render.py --map mystudy --open
+  python render.py --map mystudy --check    # 검증만 (경로·출처·순환·고아 노드)
+  python render.py --map mystudy --out D:\\share\\map.html
 """
 import json, os, sys, argparse, datetime, webbrowser
 

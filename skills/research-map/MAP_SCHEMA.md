@@ -6,7 +6,7 @@ LLM 이 세션 카드(`cards/*.json`)·메모리·문서를 읽고 이 파일을
 ```json
 {
   "version": 1,
-  "title": "TIS 연구 지도",
+  "title": "내 연구 지도",
   "updatedAt": "2026-09-15",
   "nodes": [ { ...node } ]
 }
