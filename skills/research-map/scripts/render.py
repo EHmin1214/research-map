@@ -195,18 +195,19 @@ def main():
         return
 
     # Record what moved since the last render. No movement -> no revision.
-    revs = H.record(d, m)
+    revs, created = H.record(d, m)
     marks = H.node_marks(revs)
-    since = revs[-1]["rev"] - 1 if revs else 0
-    latest = H.summarise(revs, since)
-    if latest["added"] or latest["changed"]:
+    if created and created.get("baseline"):
+        print("변경 이력 기준선을 잡았습니다 (rev1). 다음 갱신부터 바뀐 것만 보입니다.")
+    elif created:
+        latest = H.summarise(revs, created["rev"] - 1)
         print("이번 판 rev%d — 새 노드 %d개 · 바뀐 노드 %d개"
-              % (revs[-1]["rev"], len(latest["added"]), len(latest["changed"])))
+              % (created["rev"], len(latest["added"]), len(latest["changed"])))
         for f in latest["statusFlips"][:8]:
             t = next((n.get("title") for n in nodes if n.get("id") == f["id"]), f["id"])
             print("   상태 %s → %s   %s" % (f["from"], f["to"], t))
-    elif revs and revs[-1].get("baseline"):
-        print("변경 이력 기준선을 잡았습니다 (rev1). 다음 갱신부터 바뀐 것만 보입니다.")
+    elif revs:
+        print("지도 내용은 직전 판(rev%d)과 같습니다." % revs[-1]["rev"])
 
     slim = [{k: s.get(k) for k in ("sessionId", "project", "source", "cwd", "start", "end",
                                    "userPrompts", "firstPrompt", "digest", "compactions")}

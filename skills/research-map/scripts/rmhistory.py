@@ -77,7 +77,11 @@ def diff_nodes(prev_nodes, cur_nodes):
 
 
 def record(map_dir, m, when=None):
-    """Append a revision if the map moved. Returns the revisions list."""
+    """Append a revision if the map moved.
+
+    Returns (revisions, created) — `created` is the new revision or None when
+    nothing moved, so callers do not announce a change that did not happen.
+    """
     hd = _hist_dir(map_dir)
     os.makedirs(hd, exist_ok=True)
     snap_p = os.path.join(hd, "snapshot.json")
@@ -86,22 +90,25 @@ def record(map_dir, m, when=None):
     nodes = m.get("nodes") or []
     at = when or datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
+    created = None
     if not os.path.exists(snap_p):
-        revs.append({"rev": 1, "at": at, "nodes": len(nodes), "baseline": True,
-                     "added": [], "removed": [], "changed": []})
+        created = {"rev": 1, "at": at, "nodes": len(nodes), "baseline": True,
+                   "added": [], "removed": [], "changed": []}
+        revs.append(created)
     else:
         prev = _load(snap_p, {"nodes": []}).get("nodes") or []
         added, removed, changed = diff_nodes(prev, nodes)
         if not (added or removed or changed):
-            return revs                      # nothing moved; do not invent a revision
-        revs.append({"rev": (revs[-1]["rev"] + 1) if revs else 1, "at": at,
-                     "nodes": len(nodes), "added": added, "removed": removed,
-                     "changed": changed})
+            return revs, None                # nothing moved; do not invent a revision
+        created = {"rev": (revs[-1]["rev"] + 1) if revs else 1, "at": at,
+                   "nodes": len(nodes), "added": added, "removed": removed,
+                   "changed": changed}
+        revs.append(created)
 
     revs = revs[-KEEP_REVISIONS:]
     json.dump({"nodes": nodes}, open(snap_p, "w", encoding="utf-8"), ensure_ascii=False)
     json.dump({"revisions": revs}, open(revs_p, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    return revs
+    return revs, created
 
 
 def node_marks(revs):
