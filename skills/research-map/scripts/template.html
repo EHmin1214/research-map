@@ -43,6 +43,8 @@ header .meta{color:var(--muted);font-size:12px}
 .chip{border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:12px;cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:5px;background:var(--panel)}
 .chip .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
 .chip.off{opacity:.38}
+.chip.gapchip{margin-left:6px;opacity:.6}
+.chip.gapchip.on{opacity:1;border-color:var(--s-warn);background:color-mix(in srgb,var(--s-warn) 12%,transparent)}
 #badge{border:1px solid var(--accent);color:var(--accent);background:transparent;border-radius:999px;padding:2px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
 #badge.hide{display:none}
 .node .mk{position:absolute;right:6px;top:6px;width:8px;height:8px;border-radius:50%}
@@ -193,7 +195,9 @@ const STR = {
   type:{topic:'주제',direction:'방향·가설',process:'과정·실험',result:'결과',open:'열린 질문',artifact:'산출물'},
   stat:{ongoing:'진행 중',done:'완료',confirmed:'확인됨',refuted:'반증',withdrawn:'철회',
         inconclusive:'미결',abandoned:'중단',open:'열림',blocked:'막힘',planned:'계획'},
-  changes:'변경',mapTitle:'연구 지도',copied:'복사됨: ',copyFail:'복사 실패',copy:'복사',path:'경로',
+  changes:'변경',gapsOn:'채울 곳',gapTitle:'여기서 할 일',
+  gap:{noSummary:'요약 없음',noEvidence:'근거 수치 없음',noSources:'출처 없음',noNext:'다음 단계 없음'},
+  mapTitle:'연구 지도',copied:'복사됨: ',copyFail:'복사 실패',copy:'복사',path:'경로',
   sinceSeen:'지난 방문 이후',markRead:'읽음으로 표시',showChanged:'바뀐 곳만 지도에서 펼치기',allRead:'새로운 변경 없음',baseline:'기준선',
   newNodes:'새 노드',updNodes:'내용 바뀜',statusFlip:'상태 뒤집힘',removed:'삭제됨',
   noHistory:'아직 변경 이력이 없습니다. 다음 갱신부터 쌓입니다.',
@@ -210,7 +214,9 @@ const STR = {
   type:{topic:'Topic',direction:'Direction',process:'Process',result:'Result',open:'Open question',artifact:'Artifact'},
   stat:{ongoing:'ongoing',done:'done',confirmed:'confirmed',refuted:'refuted',withdrawn:'withdrawn',
         inconclusive:'inconclusive',abandoned:'abandoned',open:'open',blocked:'blocked',planned:'planned'},
-  changes:'Changes',mapTitle:'Research map',copied:'Copied: ',copyFail:'Copy failed',copy:'Copy',path:'Path',
+  changes:'Changes',gapsOn:'Gaps',gapTitle:'To fill in',
+  gap:{noSummary:'no summary',noEvidence:'no evidence',noSources:'no source',noNext:'no next step'},
+  mapTitle:'Research map',copied:'Copied: ',copyFail:'Copy failed',copy:'Copy',path:'Path',
   sinceSeen:'Since you last looked',markRead:'Mark as read',showChanged:'Expand changed on the map',allRead:'Nothing new',baseline:'baseline',
   newNodes:'New nodes',updNodes:'Updated',statusFlip:'Status flipped',removed:'Removed',
   noHistory:'No history yet. It starts accumulating from the next update.',
@@ -298,6 +304,7 @@ function layout(){
 let SEEN = {add:new Set(),chg:new Set(),flips:[],gone:[]};
 let SUB = new Set();                       // node has a changed descendant
 let focusChanged = false;  // after 'expand changed': keep the eye on what moved
+const GAPS = D.gaps||{}; let gapsOn = false;
 function rollUp(){
   SUB = new Set();
   const touched = new Set([...SEEN.add, ...SEEN.chg]);
@@ -322,7 +329,7 @@ function renderMap(){
   box.innerHTML = vis.map(n=>{
     const st=STATUS[n.status]||[n.status,'neutral']; const tc=`var(--t-${n.type})`;
     const cls=['node']; if(n.root)cls.push('root'); if(SEEN.add.has(n.id))cls.push('isnew'); else if(SEEN.chg.has(n.id))cls.push('isupd'); if(n.id===selected)cls.push('sel'); const onChange = SEEN.add.has(n.id)||SEEN.chg.has(n.id)||SUB.has(n.id);
-    if(matches(n))cls.push('match'); else if((anyMatch && !selPath.has(n.id)) || !passFilter(n) || (focusChanged && !n.root && !onChange)) cls.push('dim');
+    if(matches(n))cls.push('match'); else if((anyMatch && !selPath.has(n.id)) || !passFilter(n) || (focusChanged && !n.root && !onChange) || (gapsOn && !n.root && !GAPS[n.id])) cls.push('dim');
     const tg = n.children.length ? `<span class="tg" data-tg="${n.id}" title="${n._vis?L.collapse:L.expand}">${n._vis?'−':n.children.length}</span>` : '';
     const kind = n.root||n.type==='topic' ? '' : `<span class="k">${TYPES[n.type]||n.type}</span>`;
     const meta = n.root ? `<span>${L.nNodes(nodes.length)} · ${D.generatedAt||''}</span>` : `<span class="st"><i></i>${st[0]}</span><span>${esc(per(n))}</span>`;
@@ -359,6 +366,8 @@ function renderPanel(){
   let h=`<button class="close" id="pclose">✕</button><div class="crumb">${crumb||L.top}</div><h2>${esc(n.title)}</h2>
   <div class="badges"><span class="badge" style="background:var(--t-${n.type})">${TYPES[n.type]||n.type}</span><span class="badge" style="background:${SC[st[1]]}">${st[0]}</span>${per(n)?`<span class="badge" style="background:var(--muted)">${esc(per(n))}</span>`:''}${(n.tags||[]).map(t=>`<span class="badge" style="background:rgba(127,127,127,.35)">#${esc(t)}</span>`).join('')}</div>
   <div class="summary">${esc(n.summary||'')}</div>`;
+  const gp=GAPS[n.id]||[];
+  if(gp.length) h+=`<h3>${L.gapTitle}</h3><div class="badges">${gp.map(k=>`<span class="badge" style="background:var(--s-warn)">${L.gap[k]||k}</span>`).join('')}</div>`;
   if(n.detail) h+=`<h3>${L.detail}</h3><div class="detail">${md(n.detail)}</div>`;
   if(n.evidence&&n.evidence.length) h+=`<h3>${L.evidence}</h3><ul class="plain">${n.evidence.map(e=>`<li>${md(e).replace(/^<p>|<\/p>$/g,'')}</li>`).join('')}</ul>`;
   if(n.next&&n.next.length) h+=`<h3>${L.nextSteps}</h3><ul class="plain">${n.next.map(e=>`<li>${md(e).replace(/^<p>|<\/p>$/g,'')}</li>`).join('')}</ul>`;
@@ -455,6 +464,9 @@ function renderAll(){ SEEN=since(seenRev); rollUp(); updateBadge(); if(view==='m
 function chips(){
   const t=document.getElementById('typeChips'); t.innerHTML=Object.keys(TYPES).map(k=>`<span class="chip" data-type="${k}"><i class="dot" style="background:var(--t-${k})"></i>${TYPES[k]}</span>`).join('');
   const s=document.getElementById('statusChips'); s.innerHTML=Object.keys(STATUS).filter(k=>nodes.some(n=>n.status===k)).map(k=>`<span class="chip" data-status="${k}"><i class="dot" style="background:${SC[STATUS[k][1]]}"></i>${STATUS[k][0]}</span>`).join('');
+  const ng=Object.keys(GAPS).length;
+  if(ng){ s.insertAdjacentHTML('beforeend', `<span class="chip gapchip" id="gapchip" title="${L.gapTitle}"><i class="dot" style="background:var(--s-warn)"></i>${L.gapsOn} ${ng}</span>`);
+    document.getElementById('gapchip').onclick=e=>{ gapsOn=!gapsOn; e.currentTarget.classList.toggle('on',gapsOn); renderAll(); }; }
   t.onclick=e=>{const c=e.target.closest('.chip'); if(!c)return; const k=c.dataset.type; typeOff.has(k)?typeOff.delete(k):typeOff.add(k); c.classList.toggle('off'); renderAll();};
   s.onclick=e=>{const c=e.target.closest('.chip'); if(!c)return; const k=c.dataset.status; statusOff.has(k)?statusOff.delete(k):statusOff.add(k); c.classList.toggle('off'); renderAll();};
   document.getElementById('legend').innerHTML = `<span>${L.legend}</span>`;

@@ -16,6 +16,27 @@ import rmhistory as H
 
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "template.html")
 TYPES = {"topic", "direction", "process", "result", "open", "artifact"}
+
+# What makes a node not yet pull its weight. The page filters on the same list.
+GAP_LABEL = {
+    "noSummary":  "요약 없음",
+    "noEvidence": "결과인데 근거 수치 없음",
+    "noSources":  "출처 없음",
+    "noNext":     "열린 질문인데 다음 단계 없음",
+}
+
+
+def gaps_of(n):
+    g = []
+    if not n.get("summary"):
+        g.append("noSummary")
+    if n.get("type") == "result" and not n.get("evidence"):
+        g.append("noEvidence")
+    if n.get("type") in ("result", "process") and not n.get("sources"):
+        g.append("noSources")
+    if n.get("type") == "open" and not n.get("next"):
+        g.append("noNext")
+    return g
 STATUS = {"ongoing", "done", "confirmed", "refuted", "withdrawn", "inconclusive",
           "abandoned", "open", "blocked", "planned"}
 
@@ -45,10 +66,6 @@ def validate(m, cfg, sessions):
             errs.append("%s: parent %r not found" % (i, p))
         if not n.get("title"):
             errs.append("%s: missing title" % i)
-        if not n.get("summary"):
-            warns.append("%s: missing summary" % i)
-        if n.get("type") in ("result", "process") and not n.get("sources"):
-            warns.append("%s: %s node without sources" % (i, n["type"]))
         for s in n.get("sources") or []:
             kind = s.get("kind")
             if kind not in ("session", "file", "doc", "memory", "url"):
@@ -83,7 +100,7 @@ def validate(m, cfg, sessions):
     tops = [n for n in nodes if n.get("parent") is None]
     if len(tops) > 9:
         warns.append("%d top-level topics (스키마 권고 9개 이하)" % len(tops))
-    return errs, warns
+    return errs, warns, {n['id']: gaps_of(n) for n in nodes if n.get('id')}
 
 
 def main():
@@ -104,7 +121,7 @@ def main():
     m = json.load(open(map_p, encoding="utf-8"))
     sessions = json.load(open(sess_p, encoding="utf-8")) if os.path.exists(sess_p) else []
 
-    errs, warns = validate(m, cfg, sessions)
+    errs, warns, gaps = validate(m, cfg, sessions)
     for w in warns:
         print("WARN  " + w)
     for e in errs:
@@ -114,6 +131,15 @@ def main():
     from collections import Counter
     print("[%s] nodes: %d  by type: %s" % (name, len(nodes), dict(Counter(n.get("type") for n in nodes))))
     print("        by status: %s" % dict(Counter(n.get("status") for n in nodes)))
+    flat = [k for v in gaps.values() for k in v]
+    if flat:
+        cnt = Counter(flat)
+        print("        채울 곳: " + " · ".join("%s %d개" % (GAP_LABEL[k], c)
+                                              for k, c in cnt.most_common()))
+        worst = [i for i, v in gaps.items() if "noEvidence" in v][:6]
+        if worst:
+            ttl = {n["id"]: n.get("title") for n in nodes}
+            print("        근거 없는 결과 예: " + ", ".join(ttl.get(i, i) for i in worst))
     if errs:
         raise SystemExit("%d error(s) — map.json 을 먼저 고치세요" % len(errs))
     if args.check:
@@ -137,7 +163,7 @@ def main():
                                    "userPrompts", "firstPrompt", "digest", "compactions")}
             for s in sessions]
     data = {"map": m, "sessions": slim, "mapName": name, "lang": cfg.get("lang") or "ko",
-            "revisions": revs, "marks": marks,
+            "revisions": revs, "marks": marks, "gaps": {k: v for k, v in gaps.items() if v},
             "resumeCmd": {"claude-code": "claude --resume ", "codex": "codex resume ", "markdown": ""},
             "generatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
     payload = "window.RM_DATA = " + json.dumps(data, ensure_ascii=False).replace("</", "<\\/") + ";"

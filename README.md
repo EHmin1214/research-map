@@ -158,8 +158,12 @@ in whatever language you and your agent wrote it in.
 Each node has a type (`topic` · `direction` · `process` · `result` · `open` ·
 `artifact`), a status, a summary, and optionally `detail` (markdown), `evidence`,
 `next`, `sources` and `links`. `render.py --check` validates it: broken parents,
-cycles, unknown link targets, document paths that no longer exist on disk, and
-result nodes with no source.
+cycles, unknown link targets, and document paths that no longer exist on disk.
+
+It also reports **gaps** — a result with no evidence, a node with no source, an open
+question with no next step. These are not errors; they are the places the map does not
+yet earn a click. The page carries the same list as a **Gaps** chip: switch it on and
+everything that is already filled in fades, leaving only what needs work.
 
 See `skills/research-map/MAP_SCHEMA.md`.
 
@@ -250,6 +254,8 @@ Python 3.8 이상만 있으면 되고 추가 설치는 없다.
 | **열린 질문** | 다음에 뭘 파지 |
 | **세션** | 그게 어느 대화였고 어떻게 이어가지 |
 | **변경** | 지난번에 본 뒤로 뭐가 움직였나 |
+
+헤더의 **채울 곳** 칩을 켜면 근거·출처·다음 단계가 빠진 노드만 남는다.
 
 ## 연구마다 지도 하나
 
