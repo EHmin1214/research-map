@@ -1,0 +1,20 @@
+{
+  "name": "research-map",
+  "displayName": "Research Map",
+  "version": "0.1.0",
+  "description": "Turns your AI coding-agent transcripts into one interactive map of your research: topic -> direction -> process -> result -> open questions. Click any node for the evidence, the numbers, the documents, and the command that resumes the original session. Reads Claude Code and Codex CLI transcripts, plus exported chats from any other LLM.",
+  "author": {
+    "name": "Taemin Park"
+  },
+  "license": "MIT",
+  "keywords": [
+    "research",
+    "knowledge-map",
+    "mind-map",
+    "transcripts",
+    "session-history",
+    "note-taking",
+    "science"
+  ],
+  "skills": "./skills/"
+}

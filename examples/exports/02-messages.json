@@ -1,0 +1,4 @@
+{"messages":[
+ {"role":"user","content":"What is a fair yardstick for comparing time-division stimulation?"},
+ {"role":"assistant","content":"Vary the time-accumulation rule L^p together with the directional yardstick. p=1 is the time average; p=infinity is the instantaneous maximum."}
+]}

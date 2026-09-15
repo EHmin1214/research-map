@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "research-map",
+  "description": "Research Map — build a clickable map of everything you have researched with an AI agent",
+  "owner": {
+    "name": "Taemin Park"
+  },
+  "plugins": [
+    {
+      "name": "research-map",
+      "description": "Turns your AI coding-agent transcripts into one interactive map of your research: topic -> direction -> process -> result -> open questions. Click any node for the evidence, the numbers, the documents, and the command that resumes the original session.",
+      "category": "productivity",
+      "source": "./"
+    }
+  ]
+}
