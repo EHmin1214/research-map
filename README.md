@@ -116,6 +116,15 @@ leave those out and it folds into a collapsed tail. Anything blocked drops to it
 section with the thing it waits on. On the reference map this turned 72 undifferentiated
 items into 14 you can act on today.
 
+### Cost of an update
+
+Transcripts only ever grow, so a re-scan reads just the new bytes: the digest is appended
+to rather than rebuilt, and the extractor prints where in the file the new material starts.
+A session that has grown is then handed to the agent as *its existing card plus that tail*,
+so a 630,000-character conversation that gained 12,000 characters costs 12,000 characters
+to fold in, not 630,000. If a transcript is ever rewritten rather than appended to, a hash
+of the consumed prefix catches it and that session is rebuilt from scratch.
+
 ### Following up
 
 Every render diffs the map against the previous one and records a revision when something

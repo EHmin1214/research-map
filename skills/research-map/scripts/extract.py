@@ -74,19 +74,70 @@ def digest_session(s, cfg):
     flush()
 
     meta["filesTouched"] = sorted(meta["filesTouched"])
+    return meta, "\n".join(lines)
+
+
+BODY_MARK = "<!-- body -->"
+
+
+def render_head(meta):
     head = [
-        "# Session %s" % s.sid,
-        "- source: %s" % s.source,
-        "- project: %s" % s.group,
-        "- cwd: %s" % meta["cwd"],
-        "- period: %s → %s" % (meta["start"], meta["end"]),
+        "# Session %s" % meta["sessionId"],
+        "- source: %s" % meta.get("source"),
+        "- project: %s" % meta.get("project"),
+        "- cwd: %s" % meta.get("cwd"),
+        "- period: %s → %s" % (meta.get("start"), meta.get("end")),
         "- user prompts: %d, assistant msgs: %d, tool calls: %d, compactions: %d"
-        % (meta["userPrompts"], meta["assistantMsgs"], meta["toolCalls"], meta["compactions"]),
-        "- files written: %d" % len(meta["filesTouched"]),
+        % (meta.get("userPrompts", 0), meta.get("assistantMsgs", 0),
+           meta.get("toolCalls", 0), meta.get("compactions", 0)),
+        "- files written: %d" % len(meta.get("filesTouched") or []),
     ]
-    if meta["filesTouched"]:
+    if meta.get("filesTouched"):
         head.append("  " + "\n  ".join(meta["filesTouched"][:60]))
-    return meta, "\n".join(head) + "\n" + "\n".join(lines)
+    return "\n".join(head)
+
+
+def old_body(path):
+    """The body of an existing digest, without its header."""
+    try:
+        txt = open(path, encoding="utf-8").read()
+    except OSError:
+        return ""
+    i = txt.find(BODY_MARK)
+    return txt[i + len(BODY_MARK):].lstrip("\n") if i >= 0 else ""
+
+
+def merge_meta(prev, cur):
+    """Counts add up; identity fields come from whichever run saw them first."""
+    if not prev:
+        return cur
+    m = dict(cur)
+    for k in ("userPrompts", "assistantMsgs", "toolCalls", "compactions"):
+        m[k] = (prev.get(k) or 0) + (cur.get(k) or 0)
+    for k in ("cwd", "start", "firstPrompt"):
+        m[k] = prev.get(k) or cur.get(k)
+    m["end"] = cur.get("end") or prev.get("end")
+    m["filesTouched"] = sorted(set(prev.get("filesTouched") or []) |
+                               set(cur.get("filesTouched") or []))
+    return m
+
+
+def carded_sessions(map_dir):
+    """Session ids already covered by a card — one card may cover several."""
+    out = set()
+    cdir = os.path.join(map_dir, "cards")
+    if not os.path.isdir(cdir):
+        return out
+    for f in os.listdir(cdir):
+        if not f.endswith(".json"):
+            continue
+        try:
+            c = json.load(open(os.path.join(cdir, f), encoding="utf-8"))
+        except Exception:
+            continue
+        for sid in c.get("sessionIds") or []:
+            out.add(sid)
+    return out
 
 
 def included(meta, inc):
@@ -208,19 +259,26 @@ def main():
         if not os.path.isdir(root):
             print("WARN 소스 경로 없음: %s (%s)" % (root, kind))
             continue
-        for s in reader(root):
+        resume = {p: v for p, v in state.items() if isinstance(v, dict)}
+        for s in reader(root, resume):
             seen.add(s.sid)
             dup_of = getattr(s, "imported_from", None)
             if dup_of and (dup_of in index or dup_of in seen):
-                state[s.path] = "dup:" + dup_of
+                state[s.path] = {"dup": dup_of}
                 index.pop(s.sid, None)
                 dups += 1
                 continue
             st = os.stat(s.path)
+            prev_state = state.get(s.path)
+            prev_state = prev_state if isinstance(prev_state, dict) else {}
             sig = "%s:%d:%d" % (kind, st.st_size, int(st.st_mtime))
-            if state.get(s.path) == sig and s.sid in index:
+            if prev_state.get("sig") == sig and s.sid in index:
                 continue
+            # Only the new tail was parsed when the file had merely grown.
+            grew = bool(getattr(s, "resumed_from", 0)) and s.sid in index
             meta, body = digest_session(s, cfg)
+            if grew:
+                meta = merge_meta(index.get(s.sid), meta)
             why = R.excluded_reason(meta, cfg.get("exclude"))
             if why:
                 # Keep a stub so the page can say why, but never digest it.
@@ -228,23 +286,34 @@ def main():
                                                      "cwd", "start", "end", "userPrompts",
                                                      "firstPrompt")}
                 index[s.sid]["excluded"] = why
-                state[s.path] = sig
+                state[s.path] = {"sig": sig}
                 excl += 1
                 continue
             if not included(meta, cfg["include"]):
-                state[s.path] = sig
+                state[s.path] = {"sig": sig}
                 index.pop(s.sid, None)
                 skipped += 1
                 continue
             pdir = os.path.join(dig_dir, s.group.replace("/", "_"))
             os.makedirs(pdir, exist_ok=True)
             out = os.path.join(pdir, s.sid + ".md")
+
+            keep = old_body(out) if grew else ""
+            if grew and not body.strip():
+                state[s.path] = {"sig": sig, "offset": s.end_offset,
+                                 "head": R.head_hash(s.path, s.end_offset)}
+                continue                      # grew, but nothing worth reading
+            before = render_head(meta) + "\n" + BODY_MARK + "\n" + (keep + "\n" if keep else "")
             with open(out, "w", encoding="utf-8") as fh:
-                fh.write(body)
+                fh.write(before + body)
             meta["digest"] = out
-            meta["digestChars"] = len(body)
+            meta["digestChars"] = len(before) + len(body)
+            # Where this run's new material starts, so a card can read only the tail.
+            meta["newFromLine"] = before.count("\n") + 1 if grew else 1
+            meta["newChars"] = len(body) if grew else meta["digestChars"]
             index[s.sid] = meta
-            state[s.path] = sig
+            state[s.path] = {"sig": sig, "offset": s.end_offset,
+                             "head": R.head_hash(s.path, s.end_offset)}
             changed.append(s.sid)
 
     # Re-apply the exclude rules to everything already indexed, so editing
@@ -283,12 +352,36 @@ def main():
         if m.get("excluded"):
             print("  (연구 아님) %s %s  %s" % (m["start"], m["sessionId"][:8], m["excluded"]))
             continue
-        print("%s %s → %s  %-10s %-24s %s  프롬프트%4d  %s" % (
+        grew = (m["sessionId"] in changed and m.get("newFromLine", 1) > 1)
+        tail = ("  ← %s자 추가 (전체 %s자, %d줄부터 새것)"
+                % (format(m.get("newChars", 0), ","), format(m.get("digestChars", 0), ","),
+                   m.get("newFromLine", 1))) if grew else ""
+        print("%s %s → %s  %-10s %-24s %s  프롬프트%4d  %s%s" % (
             "*" if m["sessionId"] in changed else " ", m["start"], m["end"],
             m.get("source", "?"), m["project"][:24], m["sessionId"][:8],
-            m["userPrompts"], m["firstPrompt"][:60]))
+            m["userPrompts"], m["firstPrompt"][:52], tail))
     if changed:
-        print("\n카드를 만들 세션 %d개 — SKILL.md 2단계" % len(changed))
+        by_id = {r["sessionId"]: r for r in rows}
+        covered = carded_sessions(d)
+        grown = [c for c in changed if by_id.get(c, {}).get("newFromLine", 1) > 1]
+        fresh = [c for c in changed if c not in grown and c not in covered]
+        redone = [c for c in changed if c not in grown and c in covered]
+        print("\nSKILL.md 2단계 — 이번에 손댈 세션 %d개" % len(changed))
+        if fresh:
+            print("  새 세션 %d개 — 카드를 새로 쓴다: %s"
+                  % (len(fresh), ", ".join(c[:8] for c in fresh)))
+        if grown:
+            print("  이어진 세션 %d개 — 기존 카드 + 아래 줄부터만 읽고 **갱신**한다:" % len(grown))
+            for c in grown:
+                r = by_id[c]
+                print("    %s  %s  offset=%d줄 (%s자 추가 / 전체 %s자)"
+                      % (c[:8], r.get("digest", ""), r["newFromLine"],
+                         format(r.get("newChars", 0), ","),
+                         format(r.get("digestChars", 0), ",")))
+        if redone:
+            print("  digest 만 다시 만든 세션 %d개 — **이미 카드가 있으니 그냥 두라**." % len(redone))
+            print("    (기록이 통째로 바뀌었거나 --all 을 썼을 때 생긴다): %s"
+                  % ", ".join(c[:8] for c in redone))
 
 
 if __name__ == "__main__":

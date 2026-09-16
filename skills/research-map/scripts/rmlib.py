@@ -28,7 +28,7 @@ config.json:
 Adding a new LLM: write a `read_<kind>()` generator below and register it in
 SOURCES. It must yield RawSession objects. Nothing else in the tool changes.
 """
-import json, os, re, glob
+import hashlib, json, os, re, glob
 
 HOME = os.path.expanduser("~")
 # Maps live outside any one agent's folder so Claude Code and Codex share them.
@@ -79,6 +79,8 @@ class RawSession(object):
         self.source = source      # "claude-code" | "codex" | "markdown" | ...
         self.cwd = None
         self.imported_from = None  # this chat is a copy of another tool's session
+        self.resumed_from = 0     # bytes already digested in a previous run
+        self.end_offset = 0       # bytes consumed now, always on a line boundary
         self.events = []          # (kind, ts, payload) in order
 
     def add(self, kind, ts, payload):
@@ -97,6 +99,46 @@ def clean_user_text(t):
     return t
 
 
+HEAD_BYTES = 65536
+
+
+def head_hash(path, upto=None):
+    """Fingerprint of the file's first `upto` bytes, to prove it was only appended to.
+
+    The window must be bounded by what was already consumed: a file shorter than
+    HEAD_BYTES would otherwise hash its own new tail and never look resumable.
+    """
+    n = HEAD_BYTES if upto is None else max(0, min(HEAD_BYTES, int(upto)))
+    if not n:
+        return ""
+    try:
+        with open(path, "rb") as fh:
+            return hashlib.sha256(fh.read(n)).hexdigest()[:16]
+    except OSError:
+        return ""
+
+
+def read_tail(path, resume, sid_ok=True):
+    """Text after `resume['offset']` when the file only grew, else the whole file.
+
+    Returns (text, start_offset, end_offset). Offsets land on line boundaries,
+    so the next run can pick up exactly where this one stopped.
+    """
+    size = os.path.getsize(path)
+    start = 0
+    if sid_ok and resume and resume.get("offset"):
+        off = resume["offset"]
+        if off <= size and resume.get("head") == head_hash(path, off):
+            start = off
+    with open(path, "rb") as fh:
+        fh.seek(start)
+        raw = fh.read()
+    nl = raw.rfind(b"\n")
+    if nl < 0:
+        return "", start, start
+    return raw[:nl + 1].decode("utf-8", "replace"), start, start + nl + 1
+
+
 def _tool_key(inp):
     if isinstance(inp, str):
         return inp.replace("\n", " ")[:160]
@@ -113,14 +155,15 @@ def _tool_key(inp):
 # adapters
 # --------------------------------------------------------------------------
 
-def read_claude_code(root):
+def read_claude_code(root, resume=None):
     """Claude Code: ~/.claude/projects/<project-slug>/<sessionId>.jsonl"""
     for path in sorted(glob.glob(os.path.join(root, "*", "*.jsonl"))):
         group = os.path.basename(os.path.dirname(path))
         sid = os.path.splitext(os.path.basename(path))[0]
         s = RawSession(sid, path, group, "claude-code")
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            for raw in fh:
+        text, s.resumed_from, s.end_offset = read_tail(path, (resume or {}).get(path))
+        if True:
+            for raw in text.splitlines():
                 try:
                     d = json.loads(raw)
                 except Exception:
@@ -167,7 +210,7 @@ def _codex_imports(root):
     return out
 
 
-def read_codex(root):
+def read_codex(root, resume=None):
     """Codex CLI: ~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl"""
     imports = _codex_imports(root)
     for path in sorted(glob.glob(os.path.join(root, "*", "*", "*", "*.jsonl"))):
@@ -176,8 +219,9 @@ def read_codex(root):
         sid = m.group(1) if m else base
         s = RawSession(sid, path, "codex", "codex")
         s.imported_from = imports.get(sid)
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            for raw in fh:
+        text, s.resumed_from, s.end_offset = read_tail(path, (resume or {}).get(path))
+        if True:
+            for raw in text.splitlines():
                 try:
                     d = json.loads(raw)
                 except Exception:
@@ -206,7 +250,7 @@ def read_codex(root):
         yield s
 
 
-def read_markdown(root):
+def read_markdown(root, resume=None):
     """Any other LLM: a folder of exported conversations, one file per chat.
 
     Accepts .md / .txt / .json (ChatGPT-style {"messages":[{role,content}]}).
