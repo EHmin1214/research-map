@@ -1,0 +1,43 @@
+{
+  "name": "research-map",
+  "displayName": "Research Map",
+  "description": "Open or update your research maps from the VS Code status bar.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "private": true,
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "researchMap.pick",   "title": "Research Map: Menu" },
+      { "command": "researchMap.open",   "title": "Research Map: Open (with update buttons)" },
+      { "command": "researchMap.openStatic", "title": "Research Map: Open read-only page" },
+      { "command": "researchMap.scan",   "title": "Research Map: Check for new sessions" },
+      { "command": "researchMap.update", "title": "Research Map: Update (agent, spends tokens)" },
+      { "command": "researchMap.export", "title": "Research Map: Export for writing" },
+      { "command": "researchMap.new",    "title": "Research Map: New map" }
+    ],
+    "configuration": {
+      "title": "Research Map",
+      "properties": {
+        "researchMap.home": {
+          "type": "string",
+          "default": "",
+          "description": "Where maps live. Empty = ~/.claude/research-map (or $RESEARCH_MAP_HOME)."
+        },
+        "researchMap.python": {
+          "type": "string",
+          "default": "python",
+          "description": "Python 3.8+ executable used to run the skill's scripts."
+        },
+        "researchMap.scripts": {
+          "type": "string",
+          "default": "",
+          "description": "Folder holding render.py / extract.py. Empty = auto-detect the installed skill."
+        }
+      }
+    }
+  }
+}

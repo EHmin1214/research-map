@@ -86,7 +86,10 @@ and the page gets buttons:
 python <skill-dir>/scripts/render.py --map <name> --serve
 ```
 
-On Windows, `open-map.bat` does this for you. The panel in the **Changes** view has two
+On Windows, `open-map.bat` does this for you, and `vscode/research-map/install.ps1` adds a
+**연구 지도** item to the VS Code status bar with the same actions (open, check for new
+sessions, update, export, new map) — see [vscode/research-map/README.md](vscode/research-map/README.md).
+The panel in the **Changes** view has two
 deliberately separate steps: **check for new sessions** only reads transcripts and costs
 nothing, and **update the map** hands the merge to the agent CLI, which spends tokens.
 Output streams into the page and it reloads itself when the update lands.

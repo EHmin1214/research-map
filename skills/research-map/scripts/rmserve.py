@@ -295,3 +295,39 @@ def serve(map_name, map_dir, scripts_dir, cfg=None, port=8787, open_browser=True
         print("\n서버를 껐습니다.")
     finally:
         httpd.server_close()
+
+
+def main():
+    """CLI: run the agent step in the foreground (used by the VS Code extension and open-map.bat)."""
+    import argparse
+    ap = argparse.ArgumentParser(description="research-map: 에이전트 갱신을 서버 없이 바로 실행")
+    ap.add_argument("--map")
+    ap.add_argument("--update", action="store_true", help="extract 후 에이전트에게 카드·병합·렌더를 맡긴다 (토큰)")
+    ap.add_argument("--correct", metavar="NODE", help="이 노드를 --text 지시대로 에이전트가 정정")
+    ap.add_argument("--text", default="")
+    a = ap.parse_args()
+    name = rmlib.resolve_map(a.map)
+    d, cfg = rmlib.map_dir(name), rmlib.load_config(name)
+    agent, exe = pick_agent(cfg)
+    if not agent:
+        raise SystemExit("claude 나 codex CLI 가 PATH 에 없습니다.")
+    here = os.path.dirname(os.path.abspath(__file__))
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    if a.update:
+        print("[1/2] extract — 새 세션 확인")
+        subprocess.call([sys.executable, os.path.join(here, "extract.py"), "--map", name], env=env)
+        print("[2/2] %s — 카드·병합·렌더 (토큰을 씁니다)" % agent)
+        rc = subprocess.call(agent_argv(name, d, cfg, update_prompt(name)), cwd=d, env=env)
+        raise SystemExit(rc)
+    if a.correct:
+        m = json.load(open(os.path.join(d, "map.json"), encoding="utf-8"))
+        node = next((n for n in m.get("nodes") or [] if n.get("id") == a.correct), None)
+        if node is None or not a.text.strip():
+            raise SystemExit("노드 id 와 --text 지시가 필요합니다.")
+        rc = subprocess.call(agent_argv(name, d, cfg, correct_prompt(name, node, a.text)), cwd=d, env=env)
+        raise SystemExit(rc)
+    ap.print_help()
+
+
+if __name__ == "__main__":
+    main()
