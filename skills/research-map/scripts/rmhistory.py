@@ -23,7 +23,7 @@ import json, os, datetime
 # A change to these is a real turn in the research, not an edit.
 MAJOR = ("status", "title", "parent", "type")
 # Substance that accumulates on a node.
-LISTS = ("evidence", "next", "sources", "links", "tags")
+LISTS = ("evidence", "next", "sources", "links")   # tags are classification, not substance
 TEXTS = ("summary", "detail")
 
 KEEP_REVISIONS = 60
