@@ -1,25 +1,36 @@
 # -*- coding: utf-8 -*-
-"""research-map: a small local server so the page can update itself.
+"""research-map: a small local server so the page can update and correct itself.
 
 `index.html` on its own is a static file — it cannot run Python, and the two
 middle steps of an update (transcript -> card, cards -> map) need an agent's
-judgement anyway. So the button talks to this, which runs the real commands.
+judgement anyway. So the buttons talk to this, which runs the real commands.
 
-Deliberately two steps:
+Deliberately two steps for an update:
   1. 새 세션 확인   extract only. Cheap, deterministic, spends nothing.
   2. 지도 갱신     hands the merge to the agent CLI. This costs tokens, so it
                    is never what the first click does.
 
+Corrections from the node panel come in two flavours for the same reason:
+  /api/edit      status / title / summary changed directly in map.json, then a
+                 re-render. No agent, no tokens. A '### 변경 이력' line records it.
+  /api/correct   free-text instruction handed to the agent, scoped to one node.
+
+Which agent: config "agent" ("claude" | "codex"), else whichever is on PATH,
+claude first. Codex runs as `codex exec` with a workspace-write sandbox.
+
 Safety: binds 127.0.0.1 only, and every request must carry a token minted at
 startup and injected into the page it serves. Nothing is exposed to the network.
 """
-import http.server, json, os, secrets, subprocess, sys, threading, time, webbrowser
+import datetime, http.server, json, os, secrets, shutil, subprocess, sys, threading, webbrowser
 import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rmlib
 
 MAX_LOG = 4000
+EDITABLE = ("status", "title", "summary")
+STATUSES = ("ongoing", "done", "confirmed", "refuted", "withdrawn", "inconclusive",
+            "abandoned", "open", "blocked", "planned")
 
 
 class Job(object):
@@ -74,28 +85,114 @@ class Job(object):
                     "total": len(self.lines), "lines": self.lines[since:]}
 
 
-def agent_argv(map_name):
-    """How to ask the installed agent CLI to do the judgement steps."""
-    prompt = (rmlib.UPDATER_MARK + " research-map 스킬로 '%s' 지도를 갱신해줘. "
-              "추출(extract)은 방금 끝났으니, 바뀐 세션의 카드를 만들고 map.json 에 "
-              "병합한 다음 render 까지 해줘. 렌더는 --open 없이." % map_name)
-    exe = "claude"
-    return [exe, "-p", prompt,
+# ---------------------------------------------------------------- agent CLI
+
+def pick_agent(cfg):
+    """('claude'|'codex', path) — config wins, else first found on PATH. None if neither."""
+    want = (cfg or {}).get("agent")
+    order = [want] if want in ("claude", "codex") else ["claude", "codex"]
+    for name in order:
+        exe = shutil.which(name) or shutil.which(name + ".cmd")
+        if exe:
+            return name, exe
+    return None, None
+
+
+def agent_argv(map_name, map_dir, cfg, prompt):
+    """How to ask the installed agent CLI to do a judgement step, non-interactively."""
+    name, exe = pick_agent(cfg)
+    prompt = rmlib.UPDATER_MARK + " " + prompt
+    if name == "codex":
+        # exec = non-interactive; workspace-write keeps writes inside the map folder,
+        # which is all the skill needs (digests, cards, map.json, index.html live there).
+        return [exe, "exec", "--skip-git-repo-check", "--sandbox", "workspace-write",
+                "-C", map_dir, prompt]
+    if name == "claude":
+        return [exe, "-p", prompt,
+                "--allowedTools", "Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent"]
+    return ["claude", "-p", prompt,
             "--allowedTools", "Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent"]
 
 
-def serve(map_name, map_dir, scripts_dir, port=8787, open_browser=True):
+def update_prompt(map_name):
+    return ("research-map 스킬로 '%s' 지도를 갱신해줘. 추출(extract)은 방금 끝났으니, "
+            "바뀐 세션의 카드를 만들고 map.json 에 병합한 다음 render 까지 해줘. "
+            "렌더는 --open 없이." % map_name)
+
+
+def correct_prompt(map_name, node, text):
+    return ("research-map 스킬의 '%s' 지도에서 노드 '%s'(%s) 를 사용자 지시대로 정정해줘. "
+            "지시: %s\n세션 기록을 다시 읽지 말고 map.json 의 그 노드(필요하면 직접 관련된 노드)만 고쳐. "
+            "status 나 결론이 바뀌면 detail 에 '### 변경 이력' 으로 날짜와 이유를 남기고, "
+            "끝나면 render 해줘 (--open 없이). 지도 전체를 다시 설명하지 말고 고친 것만 짧게 보고해."
+            % (map_name, node.get("id"), node.get("title") or "", text.strip()))
+
+
+# ---------------------------------------------------------------- direct edit
+
+def apply_edit(map_dir, body):
+    """Change status/title/summary of one node in map.json. Returns (ok, message)."""
+    nid = (body.get("id") or "").strip()
+    if not nid:
+        return False, "id 없음"
+    p = os.path.join(map_dir, "map.json")
+    m = json.load(open(p, encoding="utf-8"))
+    node = next((n for n in m.get("nodes") or [] if n.get("id") == nid), None)
+    if node is None:
+        return False, "노드 없음: %s" % nid
+    changes = []
+    for k in EDITABLE:
+        if k not in body:
+            continue
+        v = (body.get(k) or "").strip()
+        if k == "status" and v not in STATUSES:
+            return False, "status 값이 이상합니다: %r" % v
+        if k == "title" and not v:
+            return False, "제목은 비울 수 없습니다"
+        if v == (node.get(k) or ""):
+            continue
+        changes.append((k, node.get(k) or "", v))
+        node[k] = v
+    if not changes:
+        return False, "바뀐 것이 없습니다"
+    today = datetime.date.today().isoformat()
+    why = (body.get("why") or "").strip()
+    lines = []
+    for k, a, b in changes:
+        if k == "status":
+            lines.append("- %s: 페이지에서 정정 — status %s → %s%s" % (today, a, b, (" (%s)" % why) if why else ""))
+        else:
+            lines.append("- %s: 페이지에서 %s 정정%s" % (today, "제목" if k == "title" else "요약", (" — %s" % why) if why else ""))
+    detail = (node.get("detail") or "").rstrip()
+    if "### 변경 이력" in detail:
+        detail += "\n" + "\n".join(lines)
+    else:
+        detail = (detail + "\n\n" if detail else "") + "### 변경 이력\n" + "\n".join(lines)
+    node["detail"] = detail
+    m["updatedAt"] = today
+    json.dump(m, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    return True, "저장: " + ", ".join("%s %s→%s" % (k, a[:20], b[:20]) if k == "status" else k for k, a, b in changes)
+
+
+# ---------------------------------------------------------------- server
+
+def serve(map_name, map_dir, scripts_dir, cfg=None, port=8787, open_browser=True):
     token = secrets.token_urlsafe(16)
     index = os.path.join(map_dir, "index.html")
     job = Job()
     py = sys.executable or "python"
+    cfg = cfg or {}
+    agent_name, _ = pick_agent(cfg)
 
     def inject(html):
         # Must land before the page's own script, which reads window.RM_SERVE on load.
-        cfg = json.dumps({"token": token, "map": map_name}, ensure_ascii=False)
-        tag = "<script>window.RM_SERVE=%s;</script>" % cfg
+        conf = json.dumps({"token": token, "map": map_name, "agent": agent_name}, ensure_ascii=False)
+        tag = "<script>window.RM_SERVE=%s;</script>" % conf
         i = html.find("<script>")
         return (html[:i] + tag + html[i:]) if i >= 0 else html.replace("</body>", tag + "</body>")
+
+    def render_argv():
+        return [py, os.path.join(scripts_dir, "render.py"), "--map", map_name]
 
     class H(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -125,6 +222,14 @@ def serve(map_name, map_dir, scripts_dir, port=8787, open_browser=True):
                 return True
             return self.headers.get("X-RM-Token") == token
 
+        def _body(self):
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                raw = self.rfile.read(n) if n else b""
+                return json.loads(raw.decode("utf-8")) if raw else {}
+            except Exception:
+                return {}
+
         def do_GET(self):
             u = urllib.parse.urlparse(self.path)
             q = urllib.parse.parse_qs(u.query)
@@ -146,20 +251,32 @@ def serve(map_name, map_dir, scripts_dir, port=8787, open_browser=True):
             q = urllib.parse.parse_qs(u.query)
             if not self._auth(q):
                 return self._deny()
-            try:
-                n = int(self.headers.get("Content-Length") or 0)
-                if n:
-                    self.rfile.read(n)
-            except Exception:
-                pass
+            body = self._body()
             if u.path == "/api/scan":
                 started = job.start("scan", [py, os.path.join(scripts_dir, "extract.py"),
                                              "--map", map_name], map_dir)
             elif u.path == "/api/update":
-                started = job.start("update", agent_argv(map_name), map_dir)
+                started = job.start("update", agent_argv(map_name, map_dir, cfg, update_prompt(map_name)), map_dir)
             elif u.path == "/api/render":
-                started = job.start("render", [py, os.path.join(scripts_dir, "render.py"),
-                                               "--map", map_name], map_dir)
+                started = job.start("render", render_argv(), map_dir)
+            elif u.path == "/api/edit":
+                ok, msg = apply_edit(map_dir, body)
+                if not ok:
+                    return self._ok(json.dumps({"started": False, "error": msg}, ensure_ascii=False))
+                started = job.start("render", render_argv(), map_dir)
+                return self._ok(json.dumps({"started": started, "applied": msg}, ensure_ascii=False))
+            elif u.path == "/api/correct":
+                nid, text = (body.get("id") or "").strip(), (body.get("text") or "").strip()
+                if not nid or not text:
+                    return self._ok(json.dumps({"started": False, "error": "노드와 지시가 필요합니다"}, ensure_ascii=False))
+                try:
+                    m = json.load(open(os.path.join(map_dir, "map.json"), encoding="utf-8"))
+                    node = next((n for n in m.get("nodes") or [] if n.get("id") == nid), None)
+                except OSError:
+                    node = None
+                if node is None:
+                    return self._ok(json.dumps({"started": False, "error": "노드 없음: %s" % nid}, ensure_ascii=False))
+                started = job.start("correct", agent_argv(map_name, map_dir, cfg, correct_prompt(map_name, node, text)), map_dir)
             else:
                 return self._deny(404, "not found")
             return self._ok(json.dumps({"started": started}))
@@ -168,6 +285,7 @@ def serve(map_name, map_dir, scripts_dir, port=8787, open_browser=True):
     url = "http://127.0.0.1:%d/?t=%s" % (port, token)
     print("연구 지도 서버: %s" % url)
     print("  이 주소는 이 컴퓨터에서만 열리고, 토큰은 서버를 끄면 사라집니다.")
+    print("  갱신·정정에 쓰는 에이전트: %s" % (agent_name or "없음 — claude 나 codex 가 PATH 에 없습니다"))
     print("  끄려면 Ctrl+C.")
     if open_browser:
         webbrowser.open(url)

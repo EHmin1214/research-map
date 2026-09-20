@@ -330,6 +330,9 @@ DEFAULT_CONFIG = {
     # can say "left out on purpose" instead of looking like a hole.
     "exclude": {"sessions": {}, "firstPromptContains": [UPDATER_MARK]},
     "memoryDirs": [],
+    # Which CLI the page's update/correct buttons call: "claude" | "codex".
+    # None = whichever is on PATH, claude first.
+    "agent": None,
 }
 
 

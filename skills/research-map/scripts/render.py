@@ -230,7 +230,7 @@ def main():
     print("wrote %s (%d KB)" % (out, len(html.encode("utf-8")) // 1024))
     if args.serve:
         import rmserve
-        rmserve.serve(name, d, os.path.dirname(os.path.abspath(__file__)),
+        rmserve.serve(name, d, os.path.dirname(os.path.abspath(__file__)), cfg=cfg,
                       port=args.port, open_browser=True)
         return
     if args.open:

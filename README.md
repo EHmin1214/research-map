@@ -95,6 +95,34 @@ The server binds `127.0.0.1` only and every request carries a token minted at st
 nothing is reachable from the network. Double-clicking `index.html` still gives you the
 plain read-only page.
 
+Which CLI the buttons call is `"agent"` in the map's `config.json` (`"claude"` or `"codex"`);
+unset, it takes whichever is on PATH, claude first. Codex runs as `codex exec` with a
+workspace-write sandbox scoped to the map folder.
+
+### Correcting a node from the page
+
+With the server running, every node panel has a **✎ Correct** button with two tiers:
+
+- **Save now** — status, title or summary. Written straight into `map.json` with a dated
+  line under `### 변경 이력` / change log, then re-rendered. No agent, no tokens.
+- **Correct via agent** — a free-text instruction, handed to the agent CLI scoped to that
+  one node. Costs tokens, so it is a separate button.
+
+### Exporting for writing
+
+No server needed. The node panel downloads **this branch as Markdown**; the **Changes** view
+downloads the **whole map** or the **do-not-cite checklist** — every number sitting on a
+withdrawn, refuted or abandoned node, as a `- [ ]` list to tick off against the manuscript.
+The same two exports exist on the command line:
+
+```bash
+python <skill-dir>/scripts/rmexport.py --map <name>                 # whole map
+python <skill-dir>/scripts/rmexport.py --map <name> --node <id>     # one subtree
+python <skill-dir>/scripts/rmexport.py --map <name> --checklist     # do-not-cite list
+```
+
+Files land in `maps/<name>/exports/`.
+
 ### The four views
 
 | View | Answers |
@@ -318,6 +346,15 @@ Python 3.8 이상만 있으면 되고 추가 설치는 없다.
 | **변경** | 지난번에 본 뒤로 뭐가 움직였나 |
 
 헤더의 **채울 곳** 칩을 켜면 근거·출처·다음 단계가 빠진 노드만 남는다.
+
+**페이지에서 갱신·정정** — `open-map.bat`(또는 `render.py --map <이름> --serve`)으로 열면
+변경 탭에 갱신 버튼 두 개(새 세션 확인 = 공짜 / 지도 갱신 = 토큰)가, 노드 패널에 **✎ 정정** 이
+생긴다. 상태·제목·요약은 바로 저장되고(무료, 변경 이력에 남음) 그 밖의 정정은 에이전트에게
+맡긴다(토큰). 어느 CLI 를 부를지는 `config.json` 의 `"agent"`(`claude`/`codex`), 없으면 PATH 순서.
+
+**논문용 내보내기** — 서버 없이도 된다. 노드 패널의 **⬇ 이 갈래를 마크다운으로**, 변경 탭의
+**전체 마크다운** / **철회 수치 체크리스트**(철회·반증·중단 노드의 수치 전부를 `- [ ]` 로 —
+원고에 없는지 하나씩 확인). CLI 는 `scripts/rmexport.py --map <이름> [--node <id>] [--checklist]`.
 
 ## 연구마다 지도 하나
 

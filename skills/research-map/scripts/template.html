@@ -73,6 +73,18 @@ header .meta{color:var(--muted);font-size:12px}
 .upd .spin{color:var(--accent);font-size:12px}
 .upd pre{margin:10px 0 0;max-height:280px;overflow:auto;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
 .upd pre:empty{display:none}
+.pbtns{display:flex;gap:6px;flex-wrap:wrap;margin:-2px 0 10px}
+.pbtns button{font-size:12px;padding:3px 9px}
+.fixform{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 14px;background:rgba(127,127,127,.06)}
+.fixform h3{margin:0 0 4px;border:0;padding:0;text-transform:none;letter-spacing:0;color:var(--ink)}
+.fixform .hint{color:var(--muted);font-size:12px;margin-bottom:8px}
+.fixform label{display:block;font-size:12px;color:var(--muted);margin:8px 0 2px}
+.fixform input,.fixform textarea,.fixform select{width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.fixform .btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.fixform button[disabled]{opacity:.45;cursor:default}
+.fixform .spin{color:var(--accent);font-size:12px}
+.fixform pre{margin:8px 0 0;max-height:220px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-word}
+.fixform pre:empty{display:none}
 .since{border:1px solid var(--accent);border-radius:8px;padding:10px 14px;margin-bottom:14px;background:color-mix(in srgb,var(--accent) 6%,transparent)}
 .since h3{margin:0 0 6px;font-size:13px;color:var(--accent);border:0;padding:0}
 /* main */
@@ -238,6 +250,12 @@ const STR = {
   noDates:'기간 정보가 있는 노드가 없습니다',noOpen:'열린 항목이 없습니다',
   colPeriod:'기간',colTool:'도구',colPrompt:'첫 프롬프트 · 연결된 노드',noLinked:'지도에 연결된 노드 없음',
   exReason:'연구 아님 — 일부러 뺌',
+  exportTitle:'논문용 내보내기',exportHint:'지도 내용을 원고에 붙일 수 있는 .md 로 내려받습니다. 체크리스트는 철회·반증·중단 노드의 수치 전부입니다 — 원고에 없는지 하나씩 확인하는 용도.',
+  exportSub:'이 갈래를 마크다운으로',exportAll:'전체 마크다운',exportChk:'철회 수치 체크리스트',
+  fix:'정정',fixTitle:'이 노드 정정',fixHint:'상태·제목·요약은 바로 저장됩니다(무료, 변경 이력에 남음). 그 밖의 정정은 에이전트에게 맡깁니다(토큰).',
+  fixTitleF:'제목',fixSummary:'요약',fixWhy:'이유 (선택)',fixSave:'바로 저장',fixAgent:'에이전트로 정정',
+  fixAgentPh:'예: 근거에 시드 잡음 12.7%p 를 추가하고 status 를 철회로 바꿔',
+  fixNoAgent:'PATH 에 claude/codex 가 없어 에이전트 정정은 못 씁니다',fixSaved:'끝났습니다 — 새로고침합니다',fixBusy:'다른 작업이 아직 돌고 있습니다.',
   legend:'노드 클릭 = 상세 · 원 = 펼치기/접기 · 드래그/휠 = 이동/확대',
   nNodes:n=>n+'개 노드',nSess:n=>n+'개 세션',nPrompts:n=>n+'개 프롬프트',madeAt:t=>'생성 '+t},
  en:{map:'Map',timeline:'Timeline',open:'Open questions',sessions:'Sessions',
@@ -263,6 +281,12 @@ const STR = {
   noDates:'No nodes carry dates',noOpen:'Nothing open',
   colPeriod:'Period',colTool:'Tool',colPrompt:'First prompt · linked nodes',noLinked:'not linked to the map',
   exReason:'left out on purpose',
+  exportTitle:'Export for writing',exportHint:'Download the map as .md to paste into a manuscript. The checklist lists every number on withdrawn, refuted or abandoned nodes — tick each one off as you confirm it is absent from the draft.',
+  exportSub:'This branch as Markdown',exportAll:'Whole map as Markdown',exportChk:'Do-not-cite checklist',
+  fix:'Correct',fixTitle:'Correct this node',fixHint:'Status, title and summary are saved directly (free, recorded in the change log). Anything else goes to the agent (spends tokens).',
+  fixTitleF:'Title',fixSummary:'Summary',fixWhy:'Reason (optional)',fixSave:'Save now',fixAgent:'Correct via agent',
+  fixAgentPh:'e.g. add the seed-noise 12.7pp to evidence and set status to withdrawn',
+  fixNoAgent:'Neither claude nor codex is on PATH, so agent corrections are unavailable',fixSaved:'done — reloading',fixBusy:'Another job is still running.',
   legend:'click a node for detail · circle = expand/collapse · drag/wheel = pan/zoom',
   nNodes:n=>n+' nodes',nSess:n=>n+' sessions',nPrompts:n=>n+' prompts',madeAt:t=>'built '+t}
 };
@@ -293,13 +317,83 @@ const SRV = window.RM_SERVE || null;
 const REVS = D.revisions||[]; const CUR_REV = REVS.length ? REVS[REVS.length-1].rev : 0;
 let jobSeen = 0, jobTimer = null;
 function srvUrl(p){ return p + (p.indexOf('?')<0?'?':'&') + 't=' + encodeURIComponent(SRV.token); }
-function srvLog(t, append){ const el=document.getElementById('updlog'); if(!el) return;
+let LOG_EL='updlog';
+function srvLog(t, append){ const el=document.getElementById(LOG_EL); if(!el) return;
   if(append) el.textContent += (el.textContent?'\n':'') + t; else el.textContent = t;
   el.scrollTop = el.scrollHeight; }
 function srvBusy(on, what){
-  ['btnscan','btnrun'].forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled=on; });
-  const sp=document.getElementById('updspin'); if(sp) sp.textContent = on ? (what+' '+L.updRunning) : '';
+  ['btnscan','btnrun','fxsave','fxagent'].forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled=on; });
+  const sp=document.getElementById(LOG_EL==='fxlog'?'fxspin':'updspin'); if(sp) sp.textContent = on ? (what+' '+L.updRunning) : '';
 }
+// node-panel corrections: direct field edit (free) or an instruction for the agent (tokens)
+function fixSend(path, body){
+  LOG_EL='fxlog'; jobSeen=0; srvLog(''); srvBusy(true, '');
+  fetch(srvUrl(path), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}).then(r=>r.json()).then(j=>{
+    if(j.error){ srvBusy(false,''); srvLog(j.error); return; }
+    if(!j.started){ srvBusy(false,''); srvLog(L.fixBusy); return; }
+    if(j.applied) srvLog(j.applied);
+    srvPoll(()=>{ srvLog('— '+L.fixSaved, true); setTimeout(()=>location.reload(), 900); });
+  }).catch(e=>{ srvBusy(false,''); srvLog('요청 실패: '+e); });
+}
+function fixForm(n){
+  const box=document.getElementById('fixbox'); if(!box) return;
+  if(box.innerHTML){ box.innerHTML=''; return; }
+  const opts=Object.keys(STATUS).map(k=>`<option value="${k}"${k===n.status?' selected':''}>${STATUS[k][0]}</option>`).join('');
+  const ag=SRV&&SRV.agent;
+  box.innerHTML=`<div class="fixform"><h3>${L.fixTitle}</h3><div class="hint">${L.fixHint}</div>
+    <label>status<select id="fxstatus">${opts}</select></label>
+    <label>${L.fixTitleF}<input id="fxtitle" value="${esc(n.title)}"></label>
+    <label>${L.fixSummary}<textarea id="fxsummary" rows="4">${esc(n.summary||'')}</textarea></label>
+    <label>${L.fixWhy}<input id="fxwhy"></label>
+    <div class="btns"><button class="primary" id="fxsave">${L.fixSave}</button><span class="spin" id="fxspin"></span></div>
+    <label>${L.fixAgent}<textarea id="fxtext" rows="3" placeholder="${esc(L.fixAgentPh)}"></textarea></label>
+    <div class="btns"><button id="fxagent"${ag?'':' disabled'}>${L.fixAgent}${ag?' ('+esc(ag)+')':''}</button>${ag?'':`<span class="hint">${L.fixNoAgent}</span>`}</div>
+    <pre id="fxlog"></pre></div>`;
+  document.getElementById('fxsave').onclick=()=>fixSend('/api/edit',{id:n.id,
+    status:document.getElementById('fxstatus').value, title:document.getElementById('fxtitle').value,
+    summary:document.getElementById('fxsummary').value, why:document.getElementById('fxwhy').value});
+  document.getElementById('fxagent').onclick=()=>{ const t=document.getElementById('fxtext').value.trim(); if(t) fixSend('/api/correct',{id:n.id,text:t}); };
+}
+// ---- markdown export (same fields and order as scripts/rmexport.py)
+const EN = D.lang==='en';
+function mdNext(x){ if(typeof x==='string') return x; const b=[x.text||'']; if(x.due) b.push('(기한 '+x.due+')'); if(x.blockedBy&&x.blockedBy.length) b.push('— 막힘: '+x.blockedBy.map(i=>byId[i]?byId[i].title:i).join(', ')); return b.join(' '); }
+function mdSrc(s){ if(s.kind==='session') return '세션 '+(s.ref||'').slice(0,8); if(s.kind==='url') return '['+(s.label||s.ref)+']('+s.ref+')'; return s.label ? s.label+' `'+s.ref+'`' : '`'+s.ref+'`'; }
+function mdNode(n, depth, heading){
+  const st=(STATUS[n.status]||[n.status])[0], ty=TYPES[n.type]||n.type, h='#'.repeat(Math.min(6,depth+1));
+  const o=(heading===false?[]:[h+' '+n.title]).concat(['*'+ty+' · '+st+(per(n)?' · '+per(n):'')+'*', '']);
+  if(n.summary) o.push(n.summary,'');
+  if(n.evidence&&n.evidence.length){ o.push(EN?'**Evidence**':'**근거·수치**'); n.evidence.forEach(e=>o.push('- '+e)); o.push(''); }
+  if(n.detail) o.push(n.detail.trim(),'');
+  if(n.next&&n.next.length){ o.push(EN?'**Next**':'**더 파볼 것**'); n.next.forEach(x=>o.push('- '+mdNext(x))); o.push(''); }
+  if(n.sources&&n.sources.length) o.push((EN?'Sources: ':'출처: ')+n.sources.map(mdSrc).join(' · '),'');
+  n.children.forEach(c=>o.push(...mdNode(c, depth+1)));
+  return o;
+}
+function mdTree(root){
+  const today=new Date().toISOString().slice(0,10);
+  const o=['# '+(root.root?(D.map.title||L.mapTitle):root.title), '', '_'+(D.map.updatedAt||'')+' · '+today+'_', ''];
+  if(root.root){ if(D.map.summary) o.push(D.map.summary,''); root.children.forEach(c=>o.push(...mdNode(c,1))); }
+  else o.push(...mdNode(root,0,false));
+  return o.join('\n').replace(/\n+$/,'')+'\n';
+}
+function mdChecklist(){
+  const today=new Date().toISOString().slice(0,10);
+  const dead=nodes.filter(n=>['withdrawn','refuted','abandoned'].includes(n.status)).sort((a,b)=>a.status<b.status?-1:a.status>b.status?1:0);
+  const cond=nodes.filter(n=>n.status==='inconclusive');
+  const o=['# '+(D.map.title||L.mapTitle)+(EN?' — do-not-cite checklist':' — 철회 수치 체크리스트'), '', '_'+today+'_', '',
+    EN?'Every number below sits on a withdrawn, refuted or abandoned node. Tick each one as you confirm it is absent from the manuscript.'
+      :'아래 수치는 전부 철회·반증·중단된 노드에 있는 값이다. 원고에 없음을 확인하면서 하나씩 체크한다.', ''];
+  dead.forEach(n=>{ o.push('## ❌ '+n.title+'  *('+(STATUS[n.status]||[n.status])[0]+')*', '_'+pathOf(n).slice(0,-1).map(a=>a.title).join(' › ')+'_', '');
+    if(n.summary) o.push('- [ ] '+n.summary); (n.evidence||[]).forEach(e=>o.push('- [ ] '+e)); o.push(''); });
+  if(cond.length){ o.push('## ⚠ '+(EN?'Conditional (inconclusive) — cite only with the caveat':'조건부 (미결) — 단서 없이 인용 금지'), '');
+    cond.forEach(n=>o.push('- [ ] **'+n.title+'** — '+(n.summary||''))); o.push(''); }
+  return o.join('\n').replace(/\n+$/,'')+'\n';
+}
+function download(name, text){ const b=new Blob([text],{type:'text/markdown;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+function exportPanelHtml(){ return `<div class="upd"><h3>${L.exportTitle}</h3><div class="hint">${L.exportHint}</div>
+  <div class="btns"><button id="expall">⬇ ${L.exportAll}</button><button id="expchk">⬇ ${L.exportChk}</button></div></div>`; }
+function bindExport(){ const mn=(D.mapName||'map'); const a=document.getElementById('expall'), c=document.getElementById('expchk');
+  if(a) a.onclick=()=>download(mn+'-all.md', mdTree(ROOT)); if(c) c.onclick=()=>download(mn+'-checklist.md', mdChecklist()); }
 function srvPoll(after){
   clearTimeout(jobTimer);
   jobTimer = setTimeout(()=>{ fetch(srvUrl('/api/job?since='+jobSeen)).then(r=>r.json()).then(j=>{
@@ -310,7 +404,7 @@ function srvPoll(after){
   }).catch(()=>{ srvBusy(false,''); srvLog('— 서버와 끊겼습니다', true); }); }, 600);
 }
 function srvRun(path, label, after){
-  jobSeen = 0; srvLog(''); srvBusy(true, label);
+  LOG_EL='updlog'; jobSeen = 0; srvLog(''); srvBusy(true, label);
   fetch(srvUrl(path), {method:'POST'}).then(r=>r.json()).then(j=>{
     if(!j.started){ srvBusy(false,''); srvLog('다른 작업이 아직 돌고 있습니다.'); return; }
     srvPoll(after);
@@ -429,7 +523,8 @@ function renderPanel(){
     .forEach(r=>{ if(!relSeen.has(r.id)){ relSeen.add(r.id); rel.push(r); } });
   let h=`<button class="close" id="pclose">✕</button><div class="crumb">${crumb||L.top}</div><h2>${esc(n.title)}</h2>
   <div class="badges"><span class="badge" style="background:var(--t-${n.type})">${TYPES[n.type]||n.type}</span><span class="badge" style="background:${SC[st[1]]}">${st[0]}</span>${per(n)?`<span class="badge" style="background:var(--muted)">${esc(per(n))}</span>`:''}${(n.tags||[]).map(t=>`<span class="badge" style="background:rgba(127,127,127,.35)">#${esc(t)}</span>`).join('')}</div>
-  <div class="summary">${esc(n.summary||'')}</div>`;
+  <div class="summary">${esc(n.summary||'')}</div>
+  <div class="pbtns"><button class="cp" id="pexport">⬇ ${L.exportSub}</button>${SRV?`<button class="cp" id="pfix">✎ ${L.fix}</button>`:''}</div><div id="fixbox"></div>`;
   const gp=GAPS[n.id]||[];
   if(gp.length) h+=`<h3>${L.gapTitle}</h3><div class="badges">${gp.map(k=>`<span class="badge" style="background:var(--s-warn)">${L.gap[k]||k}</span>`).join('')}</div>`;
   if(n.detail) h+=`<h3>${L.detail}</h3><div class="detail">${md(n.detail)}</div>`;
@@ -448,6 +543,8 @@ function renderPanel(){
   if(n.sources&&n.sources.length) h+=`<h3>${L.srcDocs} (${n.sources.length})</h3>${n.sources.map(srcRow).join('')}`;
   el.innerHTML=h; el.scrollTop=0;
   document.getElementById('pclose').onclick=()=>{selected=null; renderAll(); history.replaceState(null,'',' ');};
+  document.getElementById('pexport').onclick=()=>download((D.mapName||'map')+'-'+n.id+'.md', mdTree(n));
+  const pf=document.getElementById('pfix'); if(pf) pf.onclick=()=>fixForm(n);
 }
 
 // ---- list views
@@ -509,7 +606,7 @@ function renderList(){
         <div class="m">${relChip(n)}<span>${esc(pathOf(n)[0].title)}</span><span>${esc(n.summary||'')}</span></div></div>`).join('');
     el.innerHTML=h;
   } else if(view==='changes'){
-    if(!REVS.length && !SRV){ el.innerHTML='<div class="empty">'+L.noHistory+'</div>'; return; }
+    if(!REVS.length && !SRV){ el.innerHTML=exportPanelHtml()+'<div class="empty">'+L.noHistory+'</div>'; bindExport(); return; }
     let srvPanel = '';
     if(SRV){
       srvPanel = `<div class="upd"><h3>${L.updTitle}</h3><div class="hint">${L.updHint}</div>
@@ -520,7 +617,7 @@ function renderList(){
     const nm = id => byId[id] ? esc(byId[id].title) : esc(id);
     const chip = id => byId[id] ? relChip(byId[id]) : `<span class="rel" style="--tc:var(--muted)">${esc(id)}</span>`;
     const stat = k => (STATUS[k]||[k])[0];
-    let h=srvPanel;
+    let h=srvPanel+exportPanelHtml();
     const fresh = SEEN.add.size + SEEN.chg.size + SEEN.flips.length;
     h += `<div class="seen"><button id="markread" class="primary">${L.markRead}</button>`
       +  (fresh? `<button id="showchanged">${L.showChanged}</button>` : '')
@@ -554,6 +651,7 @@ function renderList(){
       h += '</div></details>';
     });
     el.innerHTML=h;
+    bindExport();
     const mr=document.getElementById('markread');
     if(mr) mr.onclick=()=>{ seenRev=CUR_REV; save(); renderAll(); };
     if(SRV){

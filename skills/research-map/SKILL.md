@@ -19,7 +19,8 @@ description: 연구 지도 — 지금까지 LLM 과 진행한 연구 세션(Clau
 | `scripts/extract.py` | 대화 기록 → 세션별 digest(md) + `sessions.json`. 증분 |
 | `scripts/render.py` | `map.json` 검증 + `index.html` 생성 (단일 파일, 외부 의존 없음) |
 | `scripts/rmhistory.py` | 렌더할 때마다 지도가 뭐가 움직였는지 자동 기록 (손으로 적을 필요 없음) |
-| `scripts/rmserve.py` | `--serve` 로컬 서버 — 페이지의 갱신 버튼이 여기로 붙는다 |
+| `scripts/rmserve.py` | `--serve` 로컬 서버 — 페이지의 갱신·정정 버튼이 여기로 붙는다 (claude 또는 codex CLI 호출) |
+| `scripts/rmexport.py` | 지도·서브트리를 원고용 Markdown 으로, `--checklist` 는 철회·반증 수치 인용 금지 목록 |
 | `MAP_SCHEMA.md` | 지도 노드 스키마 · 작성 규칙 (**갱신 전에 반드시 읽는다**) |
 | `CARD_SCHEMA.md` | 세션 카드 스키마 (서브에이전트가 digest 를 읽고 쓰는 중간 산출물) |
 | `<지도 폴더>` | `config.json` · `map.json` · `sessions.json` · `state.json` · `cards/` · `digests/` · `history/` · `index.html` |
@@ -172,6 +173,26 @@ python "$RM/extract.py" --init <이름> --title "..." --session 9a34d5ca
 다음 `extract` 에서 이미 색인된 세션에도 다시 적용된다(`--all` 불필요).
 
 `memoryDirs` 에는 그 연구의 메모리 폴더를 넣는다(지도의 `memory` 출처가 여기서 해석된다).
+
+## 페이지에서 정정 · 논문용 내보내기
+
+`--serve` 로 띄운 페이지는 노드 패널에 **✎ 정정** 버튼이 생긴다. 두 층이다.
+
+- **바로 저장 (무료)** — status·제목·요약만. 서버가 `map.json` 을 직접 고치고 detail 에
+  `### 변경 이력` 한 줄(날짜·이유)을 남긴 뒤 다시 렌더한다. 에이전트가 관여하지 않는다.
+- **에이전트로 정정 (토큰)** — 자유 텍스트 지시. `[research-map:updater]` 표식이 붙은
+  프롬프트로 이 스킬을 부른다. **그 노드(와 직접 관련된 노드)만** 고치고, 세션 기록을 다시 읽지
+  말고, 변경 이력을 남기고, `--open` 없이 render 하고, 고친 것만 짧게 보고한다.
+
+어느 CLI 를 부를지는 `config.json` 의 `"agent"` (`"claude"` | `"codex"`) 로 정하고, 없으면
+PATH 에서 claude → codex 순으로 찾는다. Codex 는 `codex exec --sandbox workspace-write -C <지도 폴더>`
+로 돈다 — 지도 폴더 밖에는 쓰지 않는다.
+
+**내보내기**는 서버 없이도 된다. 노드 패널의 **⬇ 이 갈래를 마크다운으로**, 변경 탭의
+**전체 마크다운** / **철회 수치 체크리스트**. CLI 는 `scripts/rmexport.py --map <이름> [--node <id>] [--checklist]`
+이고 `maps/<이름>/exports/` 에 떨어진다. 체크리스트는 withdrawn·refuted·abandoned 노드의
+요약·근거 전부를 `- [ ]` 로 늘어놓은 것이다 — 원고에 그 수치가 없는지 하나씩 확인하는 용도.
+사용자가 "논문에 쓸 정리", "철회한 숫자 목록" 을 물으면 이걸 돌려 주면 된다.
 
 ## 다른 LLM 기록 붙이기
 
