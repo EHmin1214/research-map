@@ -360,9 +360,18 @@ def main():
             "*" if m["sessionId"] in changed else " ", m["start"], m["end"],
             m.get("source", "?"), m["project"][:24], m["sessionId"][:8],
             m["userPrompts"], m["firstPrompt"][:52], tail))
+    # The standing backlog: digested, not excluded, and no card covers it. This is
+    # independent of what moved this run, so it cannot silently persist.
+    covered = carded_sessions(d)
+    backlog = [r for r in rows if r.get("digest") and not r.get("excluded")
+               and r["sessionId"] not in covered]
+    if backlog:
+        print("\n카드 없는 세션 %d개 (digest 는 있음) — 지도에 아직 안 들어갔다:" % len(backlog))
+        for r in backlog:
+            print("    %s  %s  프롬프트%4d  %s" % (r["sessionId"][:8], r["start"][:10],
+                                                 r["userPrompts"], (r["firstPrompt"] or "")[:48]))
     if changed:
         by_id = {r["sessionId"]: r for r in rows}
-        covered = carded_sessions(d)
         grown = [c for c in changed if by_id.get(c, {}).get("newFromLine", 1) > 1]
         fresh = [c for c in changed if c not in grown and c not in covered]
         redone = [c for c in changed if c not in grown and c in covered]
