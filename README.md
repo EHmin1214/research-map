@@ -19,9 +19,23 @@ any other LLM (ChatGPT, Gemini, Claude.ai …) as markdown/JSON files.
 
 한국어 설명은 [아래](#한국어)에 있습니다.
 
+![Map view — a withdrawn result selected, with its evidence and the reason it was withdrawn](docs/screenshots/map.png)
+
+<table><tr>
+<td width="50%"><img src="docs/screenshots/changes.png" alt="Changes view — what moved since you last looked, plus export buttons"></td>
+<td width="50%"><img src="docs/screenshots/open.png" alt="Open questions view — what you can do now, what is waiting on something"></td>
+</tr></table>
+
+*Screenshots are of a fictional example map (LED spectrum × lettuce growth), not real research data.*
+
 ---
 
 ## Install
+
+`install.ps1` / `install.sh` install the skill for every agent found on the machine
+**and** a status-bar button for VS Code / Cursor (**연구 지도** at the bottom left: open,
+check for new sessions, update, export, new map). Reload the editor window once after
+installing. Pass `-NoVSCode` / `--no-vscode` to skip the button.
 
 Works with **Claude Code** and **Codex CLI**. Requires Python 3.8+, nothing else — no pip install.
 
@@ -304,7 +318,12 @@ LLM 과 연구를 하다 보면 자기가 어떤 갈래를 파고 어떤 결론�
 
 ## 설치
 
-**Claude Code · 플러그인** (권장):
+레포를 받아 `install.ps1`(Windows) 또는 `install.sh` 를 한 번 돌리면 스킬(Claude Code·Codex)과
+**VS Code / Cursor 상태바 버튼**(왼쪽 아래 *연구 지도* — 열기·새 세션 확인·갱신·내보내기·새 지도)이
+같이 설치된다. 설치 뒤 에디터 창을 한 번 다시 로드하면 버튼이 보인다. 버튼이 싫으면 `-NoVSCode`.
+아래 플러그인 방식은 스킬만 설치하고 버튼은 안 생긴다.
+
+**Claude Code · 플러그인**:
 
 ```
 /plugin marketplace add EHmin1214/research-map

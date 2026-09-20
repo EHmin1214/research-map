@@ -453,7 +453,10 @@ function expandTo(n){ pathOf(n).forEach(a=>collapsed.delete(a.id)); }
 const W=230, ROW=64, COL=300;
 function layout(){
   const vis=[];
-  function h(n){ n._vis = !collapsed.has(n.id); const kids = n._vis ? n.children : []; n._h = kids.length ? kids.reduce((s,k)=>s+h(k),0) : 1; return n._h; }
+  // a card whose title wraps is taller than one row; give it the extra space so siblings never overlap
+  const units = s => [...String(s||'')].reduce((a,c)=>a+(c.charCodeAt(0)>0x2e7f?1.8:1),0);   // CJK glyphs are wide
+  const own = n => 1 + 0.36*Math.max(0, Math.ceil(units(n.title)/26) - 1);
+  function h(n){ n._vis = !collapsed.has(n.id); const kids = n._vis ? n.children : []; n._h = kids.length ? Math.max(own(n), kids.reduce((s,k)=>s+h(k),0)) : own(n); return n._h; }
   h(ROOT);
   function place(n, d, y0){ n._x = d*COL; n._y = y0 + n._h*ROW/2 - 24; vis.push(n); if(!n._vis) return; let y=y0; n.children.forEach(k=>{ place(k,d+1,y); y+=k._h*ROW; }); }
   place(ROOT,0,0);

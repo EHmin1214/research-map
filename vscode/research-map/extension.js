@@ -55,13 +55,19 @@ function listMaps() {
   return out.sort((a, b) => (b.updated || '').localeCompare(a.updated || ''));
 }
 
-function q(s) { return `'${String(s).replace(/'/g, "''")}'`; }   // PowerShell single-quote
+const WIN = process.platform === 'win32';
+// PowerShell on Windows, POSIX sh elsewhere — single quotes are the safe quote in both.
+function q(s) { return `'${String(s).replace(/'/g, WIN ? "''" : "'\\''")}'`; }
 
 // One terminal per map so a running --serve server is easy to find again.
 function terminalFor(name) {
   const title = `연구 지도: ${name}`;
   let t = vscode.window.terminals.find(x => x.name === title);
-  if (!t) t = vscode.window.createTerminal({ name: title, shellPath: 'powershell.exe', shellArgs: ['-NoLogo', '-NoProfile', '-NoExit'] });
+  if (!t) {
+    t = WIN
+      ? vscode.window.createTerminal({ name: title, shellPath: 'powershell.exe', shellArgs: ['-NoLogo', '-NoProfile', '-NoExit'] })
+      : vscode.window.createTerminal({ name: title });
+  }
   t.show(true);
   return t;
 }
@@ -69,12 +75,13 @@ function terminalFor(name) {
 function run(name, script, args) {
   const sd = scriptsDir();
   if (!sd) {
-    vscode.window.showErrorMessage('research-map 스킬을 찾지 못했습니다. install.ps1 로 먼저 설치하세요 (설정 researchMap.scripts 로 직접 지정할 수도 있습니다).');
+    vscode.window.showErrorMessage('research-map 스킬을 찾지 못했습니다. install.ps1 / install.sh 로 먼저 설치하세요 (설정 researchMap.scripts 로 직접 지정할 수도 있습니다).');
     return;
   }
   const t = terminalFor(name);
-  const py = cfg('python', 'python');
-  t.sendText(`$env:PYTHONIOENCODING='utf-8'; & ${q(py)} ${q(path.join(sd, script))} ${args.map(q).join(' ')}`, true);
+  const py = cfg('python', WIN ? 'python' : 'python3');
+  const cmd = `${q(py)} ${q(path.join(sd, script))} ${args.map(q).join(' ')}`;
+  t.sendText(WIN ? `$env:PYTHONIOENCODING='utf-8'; & ${cmd}` : `PYTHONIOENCODING=utf-8 ${cmd}`, true);
 }
 
 async function pickMap(placeHolder) {

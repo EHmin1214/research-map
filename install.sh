@@ -14,11 +14,12 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 src="$here/skills/research-map"
 [ -d "$src" ] || { echo "skills/research-map not found next to this script" >&2; exit 1; }
 
-want_claude=1; want_codex=1; explicit=""
+want_claude=1; want_codex=1; want_vscode=1; explicit=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --claude) want_codex=0 ;;
     --codex)  want_claude=0 ;;
+    --no-vscode) want_vscode=0 ;;
     --to)     shift; explicit="${1:-}" ;;
     -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -63,6 +64,17 @@ done
 if [ -n "$py" ]; then
   echo
   "$py" "${targets[0]}/scripts/extract.py" --doctor || true
+fi
+
+# VS Code / Cursor status-bar button (three files, no download). Skip with --no-vscode.
+if [ "$want_vscode" = 1 ] && [ -z "$explicit" ] && [ -d "$here/vscode/research-map" ]; then
+  for ide in .vscode .cursor; do
+    [ -d "$HOME/$ide/extensions" ] || continue
+    root="$HOME/$ide/extensions/local.research-map-0.1.0"
+    mkdir -p "$root"
+    cp "$here/vscode/research-map/package.json" "$here/vscode/research-map/extension.js" "$here/vscode/research-map/README.md" "$root/"
+    echo "installed   $root  (status-bar button; reload the window once)"
+  done
 fi
 echo
 echo "Next: ask your agent  'build my research map'"

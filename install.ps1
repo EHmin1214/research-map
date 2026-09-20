@@ -11,6 +11,7 @@
 param(
   [switch]$Claude,
   [switch]$Codex,
+  [switch]$NoVSCode,
   [string]$To
 )
 
@@ -67,6 +68,25 @@ foreach ($dst in $targets) {
 if ($py) {
   Write-Host ""
   & $py (Join-Path $targets[0] "scripts\extract.py") --doctor
+}
+
+# VS Code / Cursor status-bar button (three files, no download). Skip with -NoVSCode.
+if (-not $NoVSCode -and -not $To) {
+  $ext = Join-Path $PSScriptRoot "vscode\research-map"
+  if (Test-Path $ext) {
+    $ides = @()
+    foreach ($ide in @(".vscode", ".cursor")) {
+      $d = Join-Path $env:USERPROFILE "$ide\extensions"
+      if (Test-Path $d) { $ides += (Join-Path $d "local.research-map-0.1.0") }
+    }
+    foreach ($root in $ides) {
+      New-Item -ItemType Directory -Force -Path $root | Out-Null
+      foreach ($f in @("package.json", "extension.js", "README.md")) {
+        Copy-Item -Force (Join-Path $ext $f) (Join-Path $root $f)
+      }
+      Write-Host "installed   $root  (status-bar button; reload the window once)" -ForegroundColor Green
+    }
+  }
 }
 Write-Host ""
 Write-Host "Next: ask your agent  'build my research map'"

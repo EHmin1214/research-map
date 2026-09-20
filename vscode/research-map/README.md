@@ -19,11 +19,15 @@ With one map the menu skips the map picker. The scripts are found the same way
 
 ## Install
 
+The repo's top-level `install.ps1` / `install.sh` already installs this alongside the skill.
+To install only the button:
+
 ```powershell
 .\install.ps1        # copies into ~/.vscode/extensions (and ~/.cursor/extensions if present)
 ```
 
 Then reload the VS Code window once. Nothing is downloaded; the extension is three files.
+Works on Windows (PowerShell terminal) and macOS/Linux (default shell).
 
 ## 한국어
 
