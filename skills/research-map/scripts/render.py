@@ -81,6 +81,35 @@ STATUS = {"ongoing", "done", "confirmed", "refuted", "withdrawn", "inconclusive"
           "abandoned", "open", "blocked", "planned"}
 
 
+def _tokens(s):
+    import re
+    return {t for t in re.findall(r"[0-9A-Za-z가-힣]+", (s or "").lower()) if len(t) > 1}
+
+
+def suspected_duplicates(nodes, threshold=0.6):
+    """Pairs of nodes whose titles share most of their words. Parent/child pairs and
+    nodes already linked to each other are not reported — those are deliberate."""
+    out = []
+    toks = {n["id"]: _tokens(n.get("title")) for n in nodes if n.get("id")}
+    by = {n["id"]: n for n in nodes if n.get("id")}
+    ids = list(toks)
+    for i, a in enumerate(ids):
+        for b in ids[i + 1:]:
+            ta, tb = toks[a], toks[b]
+            if len(ta) < 3 or len(tb) < 3:
+                continue
+            sim = len(ta & tb) / float(len(ta | tb))
+            if sim < threshold:
+                continue
+            na, nb = by[a], by[b]
+            if na.get("parent") == b or nb.get("parent") == a:
+                continue
+            if b in (na.get("links") or []) or a in (nb.get("links") or []):
+                continue
+            out.append((a, b, sim))
+    return sorted(out, key=lambda x: -x[2])
+
+
 def validate(m, cfg, sessions):
     errs, warns = [], []
     nodes = m.get("nodes") or []
@@ -193,6 +222,11 @@ def main():
         if worst:
             ttl = {n["id"]: n.get("title") for n in nodes}
             print("        근거 없는 결과 예: " + ", ".join(ttl.get(i, i) for i in worst))
+    dups = suspected_duplicates(nodes)
+    if dups:
+        print("        중복 의심 %d쌍 — 제목이 거의 같은 노드 (한쪽에 합치거나 links 로 잇기):" % len(dups))
+        for a, b, sim in dups[:6]:
+            print("          %s ↔ %s  (%.0f%%)" % (a, b, sim * 100))
     if errs:
         raise SystemExit("%d error(s) — map.json 을 먼저 고치세요" % len(errs))
     if args.check:

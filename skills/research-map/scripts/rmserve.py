@@ -153,11 +153,20 @@ def apply_edit(map_dir, body):
             continue
         changes.append((k, node.get(k) or "", v))
         node[k] = v
-    if not changes:
-        return False, "바뀐 것이 없습니다"
     today = datetime.date.today().isoformat()
     why = (body.get("why") or "").strip()
     lines = []
+    # One-line appends — the corrections people make most, and they need no judgement.
+    add_ev = (body.get("addEvidence") or "").strip()
+    if add_ev:
+        node.setdefault("evidence", []).append(add_ev)
+        lines.append("- %s: 페이지에서 근거 추가 — %s" % (today, add_ev[:80]))
+    add_nx = (body.get("addNext") or "").strip()
+    if add_nx:
+        node.setdefault("next", []).append(add_nx)
+        lines.append("- %s: 페이지에서 다음 단계 추가 — %s" % (today, add_nx[:80]))
+    if not changes and not lines:
+        return False, "바뀐 것이 없습니다"
     for k, a, b in changes:
         if k == "status":
             lines.append("- %s: 페이지에서 정정 — status %s → %s%s" % (today, a, b, (" (%s)" % why) if why else ""))
@@ -171,7 +180,10 @@ def apply_edit(map_dir, body):
     node["detail"] = detail
     m["updatedAt"] = today
     json.dump(m, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-    return True, "저장: " + ", ".join("%s %s→%s" % (k, a[:20], b[:20]) if k == "status" else k for k, a, b in changes)
+    what = ["%s %s→%s" % (k, a[:20], b[:20]) if k == "status" else k for k, a, b in changes]
+    if add_ev: what.append("evidence +1")
+    if add_nx: what.append("next +1")
+    return True, "저장: " + ", ".join(what)
 
 
 # ---------------------------------------------------------------- server
@@ -281,7 +293,31 @@ def serve(map_name, map_dir, scripts_dir, cfg=None, port=8787, open_browser=True
                 return self._deny(404, "not found")
             return self._ok(json.dumps({"started": started}))
 
-    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", port), H)
+    # If the port is taken (another map's server, or this map already running), walk up.
+    # Note: bind() alone is not a reliable test on Windows (SO_REUSEADDR lets two servers
+    # share a port silently), so probe with a connect first.
+    import socket
+    def in_use(p):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.2)
+        try:
+            return s.connect_ex(("127.0.0.1", p)) == 0
+        finally:
+            s.close()
+    httpd = None
+    for p in range(port, port + 20):
+        if in_use(p):
+            continue
+        try:
+            httpd = http.server.ThreadingHTTPServer(("127.0.0.1", p), H)
+            break
+        except OSError:
+            continue
+    if httpd is None:
+        raise SystemExit("127.0.0.1:%d~%d 가 모두 사용 중입니다." % (port, port + 19))
+    if p != port:
+        print("포트 %d 는 사용 중 — %d 로 띄웁니다." % (port, p))
+    port = p
     url = "http://127.0.0.1:%d/?t=%s" % (port, token)
     print("연구 지도 서버: %s" % url)
     print("  이 주소는 이 컴퓨터에서만 열리고, 토큰은 서버를 끄면 사라집니다.")

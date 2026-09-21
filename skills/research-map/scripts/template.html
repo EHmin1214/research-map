@@ -254,6 +254,7 @@ const STR = {
   exportSub:'이 갈래를 마크다운으로',exportAll:'전체 마크다운',exportChk:'철회 수치 체크리스트',
   fix:'정정',fixTitle:'이 노드 정정',fixHint:'상태·제목·요약은 바로 저장됩니다(무료, 변경 이력에 남음). 그 밖의 정정은 에이전트에게 맡깁니다(토큰).',
   fixTitleF:'제목',fixSummary:'요약',fixWhy:'이유 (선택)',fixSave:'바로 저장',fixAgent:'에이전트로 정정',
+  fixAddEv:'근거 한 줄 추가 (선택)',fixAddEvPh:'예: 시드 퍼짐 field 12.7%p / af 21.0%p',fixAddNext:'다음 단계 한 줄 추가 (선택)',fixAddNextPh:'예: 시드 10개 평균으로 재검',
   fixAgentPh:'예: 근거에 시드 잡음 12.7%p 를 추가하고 status 를 철회로 바꿔',
   fixNoAgent:'PATH 에 claude/codex 가 없어 에이전트 정정은 못 씁니다',fixSaved:'끝났습니다 — 새로고침합니다',fixBusy:'다른 작업이 아직 돌고 있습니다.',
   legend:'노드 클릭 = 상세 · 원 = 펼치기/접기 · 드래그/휠 = 이동/확대',
@@ -285,6 +286,7 @@ const STR = {
   exportSub:'This branch as Markdown',exportAll:'Whole map as Markdown',exportChk:'Do-not-cite checklist',
   fix:'Correct',fixTitle:'Correct this node',fixHint:'Status, title and summary are saved directly (free, recorded in the change log). Anything else goes to the agent (spends tokens).',
   fixTitleF:'Title',fixSummary:'Summary',fixWhy:'Reason (optional)',fixSave:'Save now',fixAgent:'Correct via agent',
+  fixAddEv:'Add one evidence line (optional)',fixAddEvPh:'e.g. seed spread field 12.7pp / af 21.0pp',fixAddNext:'Add one next step (optional)',fixAddNextPh:'e.g. re-run with 10 seeds',
   fixAgentPh:'e.g. add the seed-noise 12.7pp to evidence and set status to withdrawn',
   fixNoAgent:'Neither claude nor codex is on PATH, so agent corrections are unavailable',fixSaved:'done — reloading',fixBusy:'Another job is still running.',
   legend:'click a node for detail · circle = expand/collapse · drag/wheel = pan/zoom',
@@ -344,6 +346,8 @@ function fixForm(n){
     <label>status<select id="fxstatus">${opts}</select></label>
     <label>${L.fixTitleF}<input id="fxtitle" value="${esc(n.title)}"></label>
     <label>${L.fixSummary}<textarea id="fxsummary" rows="4">${esc(n.summary||'')}</textarea></label>
+    <label>${L.fixAddEv}<input id="fxaddev" placeholder="${esc(L.fixAddEvPh)}"></label>
+    <label>${L.fixAddNext}<input id="fxaddnext" placeholder="${esc(L.fixAddNextPh)}"></label>
     <label>${L.fixWhy}<input id="fxwhy"></label>
     <div class="btns"><button class="primary" id="fxsave">${L.fixSave}</button><span class="spin" id="fxspin"></span></div>
     <label>${L.fixAgent}<textarea id="fxtext" rows="3" placeholder="${esc(L.fixAgentPh)}"></textarea></label>
@@ -351,7 +355,8 @@ function fixForm(n){
     <pre id="fxlog"></pre></div>`;
   document.getElementById('fxsave').onclick=()=>fixSend('/api/edit',{id:n.id,
     status:document.getElementById('fxstatus').value, title:document.getElementById('fxtitle').value,
-    summary:document.getElementById('fxsummary').value, why:document.getElementById('fxwhy').value});
+    summary:document.getElementById('fxsummary').value, why:document.getElementById('fxwhy').value,
+    addEvidence:document.getElementById('fxaddev').value, addNext:document.getElementById('fxaddnext').value});
   document.getElementById('fxagent').onclick=()=>{ const t=document.getElementById('fxtext').value.trim(); if(t) fixSend('/api/correct',{id:n.id,text:t}); };
 }
 // ---- markdown export (same fields and order as scripts/rmexport.py)

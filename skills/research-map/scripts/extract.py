@@ -159,6 +159,34 @@ def included(meta, inc):
     return True
 
 
+def copy_candidates(rows):
+    """[(copy_sid, original_sid)] — a session whose first prompt equals an earlier session's
+    and whose start == end (the transcript was written in one go, i.e. copied/forked)."""
+    live = [r for r in rows if not r.get("excluded") and (r.get("firstPrompt") or "").strip()]
+    by_prompt = {}
+    for r in sorted(live, key=lambda r: r.get("start") or ""):
+        by_prompt.setdefault((r["firstPrompt"] or "")[:160], []).append(r)
+    out = []
+    for group in by_prompt.values():
+        if len(group) < 2:
+            continue
+        orig = group[0]
+        for r in group[1:]:
+            if r.get("start") and r.get("start") == r.get("end") and r["sessionId"] != orig["sessionId"]:
+                out.append((r["sessionId"], orig["sessionId"]))
+                r["copyOf"] = orig["sessionId"]
+    # A single-timestamp transcript that opens with a compaction summary is a resumed
+    # copy of some earlier session even when the first prompt differs (the prompt is
+    # whatever was typed right after the fork). Original unknown — say so.
+    known = {c for c, _ in out}
+    for r in live:
+        if (r["sessionId"] not in known and r.get("start") and r.get("start") == r.get("end")
+                and (r.get("compactions") or 0) > 0 and (r.get("userPrompts") or 0) > 3):
+            out.append((r["sessionId"], "?"))
+            r["copyOf"] = "?"
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--map")
@@ -337,6 +365,7 @@ def main():
     rows = sorted(index.values(), key=lambda m: m.get("start") or "")
     for r in rows:
         r.setdefault("source", "claude-code")
+    copies = copy_candidates(rows)       # marks rows[i]["copyOf"] before the index is written
     with open(index_p, "w", encoding="utf-8") as fh:
         json.dump(rows, fh, ensure_ascii=False, indent=1)
     with open(state_p, "w", encoding="utf-8") as fh:
@@ -360,6 +389,14 @@ def main():
             "*" if m["sessionId"] in changed else " ", m["start"], m["end"],
             m.get("source", "?"), m["project"][:24], m["sessionId"][:8],
             m["userPrompts"], m["firstPrompt"][:52], tail))
+    # Forked / resumed copies: same first prompt as an older session and a single
+    # timestamp (start == end). Their content is already on the map via the original;
+    # the card should only add them as a source, never rebuild nodes.
+    if copies:
+        print("\n사본 후보 %d개 — 첫 프롬프트가 같고 시각이 하나뿐 (포크·재개 사본). 원본 노드에 출처만 붙일 것:" % len(copies))
+        for sid, orig in copies:
+            print("    %s  ←  %s" % (sid[:8], ("%s 의 사본으로 보임" % orig[:8]) if orig != "?"
+                                     else "압축 요약으로 시작하는 재개 사본 — 원본은 digest 첫머리에서 확인"))
     # The standing backlog: digested, not excluded, and no card covers it. This is
     # independent of what moved this run, so it cannot silently persist.
     covered = carded_sessions(d)
